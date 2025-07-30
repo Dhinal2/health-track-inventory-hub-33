@@ -11,6 +11,7 @@ import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
 import Shipments from "./pages/Shipments";
 import Invoices from "./pages/Invoices";
+import { Reports } from "./pages/Reports";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
@@ -32,8 +33,8 @@ const App = () => (
           <Route path="/orders" element={<AuthGuard><Orders /></AuthGuard>} />
           <Route path="/shipments" element={<AuthGuard><Shipments /></AuthGuard>} />
           <Route path="/invoices" element={<AuthGuard><Invoices /></AuthGuard>} />
+          <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
           {/* Placeholder routes for other modules */}
-          <Route path="/reports" element={<AuthGuard><Index /></AuthGuard>} />
           <Route path="/settings" element={<AuthGuard><Index /></AuthGuard>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
