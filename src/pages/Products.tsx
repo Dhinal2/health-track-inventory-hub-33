@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Layout } from '../components/Layout';
 import { Plus, Download, Edit, Trash2, ShoppingCart } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { Label } from '../components/ui/label';
+import { useToast } from '../hooks/use-toast';
 
 interface Product {
   id: number;
@@ -14,9 +20,10 @@ interface Product {
 }
 
 const Products = () => {
+  const { toast } = useToast();
   const [user] = useState({
     name: 'Dr. Sarah Johnson',
-    role: 'admin' as 'admin' | 'staff'
+    role: 'staff' as 'admin' | 'staff'  // Changed to staff to test the feature
   });
 
   const [products, setProducts] = useState<Product[]>([
@@ -53,7 +60,12 @@ const Products = () => {
   ]);
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestedProducts, setRequestedProducts] = useState<Set<number>>(new Set());
+  const [formData, setFormData] = useState({
+    quantity: 1,
+    remarks: ''
+  });
 
   const handleEdit = (product: Product) => {
     if (user.role === 'admin') {
@@ -67,9 +79,37 @@ const Products = () => {
     }
   };
 
-  const handlePurchase = (product: Product) => {
+  const handleRequest = (product: Product) => {
     setSelectedProduct(product);
-    setIsPurchaseModalOpen(true);
+    setFormData({ quantity: 1, remarks: '' });
+    setIsRequestModalOpen(true);
+  };
+
+  const handleSubmitRequest = () => {
+    if (!selectedProduct) return;
+
+    // In a real app, this would be sent to your backend
+    console.log('Request submitted:', {
+      productId: selectedProduct.id,
+      quantity: formData.quantity,
+      remarks: formData.remarks,
+      userId: user.name,
+      status: 'Pending'
+    });
+
+    // Add to requested products set to disable button
+    setRequestedProducts(prev => new Set(prev).add(selectedProduct.id));
+
+    // Show success toast
+    toast({
+      title: "Request submitted successfully",
+      description: `Your request for ${formData.quantity} ${selectedProduct.name} has been submitted for approval.`,
+    });
+
+    // Close modal and reset form
+    setIsRequestModalOpen(false);
+    setSelectedProduct(null);
+    setFormData({ quantity: 1, remarks: '' });
   };
 
   const handleAddNew = () => {
@@ -141,34 +181,38 @@ const Products = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {product.supplier}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
-                        {user.role === 'staff' && (
-                          <button
-                            onClick={() => handlePurchase(product)}
-                            className="text-green-600 hover:text-green-900 p-1 rounded"
-                          >
-                            <ShoppingCart className="w-4 h-4" />
-                          </button>
-                        )}
-                        {user.role === 'admin' && (
-                          <>
-                            <button
-                              onClick={() => handleEdit(product)}
-                              className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(product.id)}
-                              className="text-red-600 hover:text-red-900 p-1 rounded"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                       <div className="flex items-center justify-end space-x-2">
+                         {user.role === 'staff' && (
+                           <Button
+                             onClick={() => handleRequest(product)}
+                             disabled={requestedProducts.has(product.id)}
+                             size="sm"
+                             variant={requestedProducts.has(product.id) ? "secondary" : "default"}
+                             className="flex items-center space-x-1"
+                           >
+                             <ShoppingCart className="w-4 h-4" />
+                             <span>{requestedProducts.has(product.id) ? 'Requested' : 'Request'}</span>
+                           </Button>
+                         )}
+                         {user.role === 'admin' && (
+                           <>
+                             <button
+                               onClick={() => handleEdit(product)}
+                               className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                             >
+                               <Edit className="w-4 h-4" />
+                             </button>
+                             <button
+                               onClick={() => handleDelete(product.id)}
+                               className="text-red-600 hover:text-red-900 p-1 rounded"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                           </>
+                         )}
+                       </div>
+                     </td>
                   </tr>
                 ))}
               </tbody>
@@ -176,56 +220,72 @@ const Products = () => {
           </div>
         </div>
 
-        {isPurchaseModalOpen && selectedProduct && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Purchase Request</h3>
-                <button
-                  onClick={() => setIsPurchaseModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ×
-                </button>
-              </div>
+        <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Request Product</DialogTitle>
+            </DialogHeader>
+            
+            {selectedProduct && (
               <div className="space-y-4">
-                <div>
-                  <p className="font-medium">{selectedProduct.name}</p>
-                  <p className="text-sm text-gray-500">SKU: {selectedProduct.sku}</p>
-                  <p className="text-sm text-gray-500">Price: ${selectedProduct.price.toFixed(2)}</p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900">{selectedProduct.name}</h4>
+                  <p className="text-sm text-gray-600">SKU: {selectedProduct.sku}</p>
+                  <p className="text-sm text-gray-600">Price: ${selectedProduct.price.toFixed(2)}</p>
+                  <p className="text-sm text-gray-600">Available: {selectedProduct.stockQuantity} units</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={selectedProduct.stockQuantity}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="quantity">Quantity *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      max={selectedProduct.stockQuantity}
+                      value={formData.quantity}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        quantity: parseInt(e.target.value) || 1
+                      }))}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="remarks">Remarks (Optional)</Label>
+                    <Textarea
+                      id="remarks"
+                      placeholder="Add any additional notes or reason for this request..."
+                      value={formData.remarks}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        remarks: e.target.value
+                      }))}
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setIsPurchaseModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsRequestModalOpen(false)}
                   >
                     Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('Purchase request submitted');
-                      setIsPurchaseModalOpen(false);
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  </Button>
+                  <Button 
+                    onClick={handleSubmitRequest}
+                    disabled={formData.quantity < 1 || formData.quantity > selectedProduct.stockQuantity}
                   >
                     Submit Request
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
