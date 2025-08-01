@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Plus, Download, Edit, Trash2, ShoppingCart } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -21,10 +21,18 @@ interface Product {
 
 const Products = () => {
   const { toast } = useToast();
-  const [user] = useState({
-    name: 'Dr. Sarah Johnson',
-    role: 'staff' as 'admin' | 'staff'  // Changed to staff to test the feature
-  });
+  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser({
+        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
+        role: parsedUser.role || 'staff'
+      });
+    }
+  }, []);
 
   const [products, setProducts] = useState<Product[]>([
     {
@@ -68,13 +76,13 @@ const Products = () => {
   });
 
   const handleEdit = (product: Product) => {
-    if (user.role === 'admin') {
+    if (user?.role === 'admin') {
       console.log('Edit product:', product);
     }
   };
 
   const handleDelete = (productId: number) => {
-    if (user.role === 'admin') {
+    if (user?.role === 'admin') {
       setProducts(prev => prev.filter(p => p.id !== productId));
     }
   };
@@ -93,7 +101,7 @@ const Products = () => {
       productId: selectedProduct.id,
       quantity: formData.quantity,
       remarks: formData.remarks,
-      userId: user.name,
+      userId: user?.name,
       status: 'Pending'
     });
 
@@ -113,10 +121,18 @@ const Products = () => {
   };
 
   const handleAddNew = () => {
-    if (user.role === 'admin') {
+    if (user?.role === 'admin') {
       console.log('Add new product');
     }
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <Layout userRole={user.role} userName={user.name}>
@@ -128,7 +144,7 @@ const Products = () => {
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
-            {user.role === 'admin' && (
+            {user?.role === 'admin' && (
               <button 
                 onClick={handleAddNew}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
@@ -183,7 +199,7 @@ const Products = () => {
                     </td>
                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                        <div className="flex items-center justify-end space-x-2">
-                         {user.role === 'staff' && (
+                         {user?.role === 'staff' && (
                            <Button
                              onClick={() => handleRequest(product)}
                              disabled={requestedProducts.has(product.id)}
@@ -195,7 +211,7 @@ const Products = () => {
                              <span>{requestedProducts.has(product.id) ? 'Requested' : 'Request'}</span>
                            </Button>
                          )}
-                         {user.role === 'admin' && (
+                         {user?.role === 'admin' && (
                            <>
                              <button
                                onClick={() => handleEdit(product)}
