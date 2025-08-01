@@ -22,6 +22,43 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
 
+    // Hardcoded dummy users for testing role-based access
+    const dummyUsers = [
+      { email: 'admin@gmail.com', password: 'Admin', role: 'admin' },
+      { email: 'staff@gmail.com', password: 'Staff', role: 'staff' }
+    ];
+
+    setTimeout(() => {
+      // Check against hardcoded users
+      const user = dummyUsers.find(
+        u => u.email === email && u.password === password && u.role === role
+      );
+
+      if (user) {
+        // Store user data in localStorage
+        localStorage.setItem('user', JSON.stringify({
+          email: user.email,
+          role: user.role,
+          name: user.email.split('@')[0]
+        }));
+        
+        toast({
+          title: "Login Successful",
+          description: `Welcome back! Logged in as ${role === 'admin' ? 'Administrator' : 'Healthcare Staff'}.`,
+        });
+        
+        navigate('/');
+      } else {
+        toast({
+          title: "Login Failed",
+          description: "Invalid email, password, or role combination.",
+          variant: "destructive",
+        });
+      }
+      setIsLoading(false);
+    }, 1000);
+
+    /* Original backend authentication code - commented out for hardcoded testing
     // Mock authentication - replace with actual backend later
     setTimeout(() => {
       if (email && password) {
@@ -47,6 +84,7 @@ const Login = () => {
       }
       setIsLoading(false);
     }, 1000);
+    */
   };
 
   return (
