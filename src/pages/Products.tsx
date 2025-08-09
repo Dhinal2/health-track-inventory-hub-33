@@ -27,6 +27,7 @@ const Products = () => {
     const userData = localStorage.getItem('user');
     if (userData) {
       const parsedUser = JSON.parse(userData);
+      console.log('User data from localStorage:', parsedUser); // Debug log
       setUser({
         name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
         role: parsedUser.role || 'staff'
