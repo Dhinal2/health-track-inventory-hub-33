@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { InventoryTable } from '../components/InventoryTable';
 import { InventoryFilters } from '../components/InventoryFilters';
@@ -21,10 +21,18 @@ export interface InventoryItem {
 }
 
 const Inventory = () => {
-  const [user] = useState({
-    name: 'Dr. Sarah Johnson',
-    role: 'admin' as const
-  });
+  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser({
+        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
+        role: parsedUser.role || 'staff'
+      });
+    }
+  }, []);
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([
     {
@@ -100,7 +108,7 @@ const Inventory = () => {
   const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
 
   const handleEdit = (item: InventoryItem) => {
-    if (user.role === 'admin') {
+    if (user?.role === 'admin') {
       setSelectedItem(item);
       setIsModalOpen(true);
     }
@@ -123,7 +131,7 @@ const Inventory = () => {
   };
 
   const handleAddNew = () => {
-    if (user.role === 'admin') {
+    if (user?.role === 'admin') {
       setSelectedItem(null);
       setIsModalOpen(true);
     }
@@ -175,6 +183,14 @@ const Inventory = () => {
     setFilteredItems(filtered);
   };
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <Layout userRole={user.role} userName={user.name}>
       <div className="space-y-6">
@@ -185,7 +201,7 @@ const Inventory = () => {
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
-            {user.role === 'admin' && (
+            {user?.role === 'admin' && (
               <button 
                 onClick={handleAddNew}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
@@ -206,7 +222,7 @@ const Inventory = () => {
           onReorder={handleReorder}
         />
 
-        {isModalOpen && user.role === 'admin' && (
+        {isModalOpen && user?.role === 'admin' && (
           <EditInventoryModal
             item={selectedItem}
             isOpen={isModalOpen}

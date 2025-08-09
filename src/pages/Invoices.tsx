@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Button } from '@/components/ui/button';
 import { Plus, Download, FileText } from 'lucide-react';
@@ -50,10 +50,18 @@ type FilterState = {
 };
 
 const Invoices = () => {
-  const [user] = useState({
-    name: 'Dr. Sarah Johnson',
-    role: 'admin' as 'admin' | 'staff'
-  });
+  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser({
+        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
+        role: parsedUser.role || 'staff'
+      });
+    }
+  }, []);
 
   const { toast } = useToast();
 
@@ -301,6 +309,14 @@ const Invoices = () => {
   const totalOutstanding = filteredInvoices
     .filter(inv => inv.paymentStatus !== 'paid')
     .reduce((sum, inv) => sum + inv.grandTotal, 0);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <Layout userRole={user.role} userName={user.name}>

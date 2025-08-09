@@ -58,8 +58,16 @@ export const Reports: React.FC = () => {
         { value: 'usage-trends', label: 'Usage Trends' }
       ];
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <Layout>
+    <Layout userRole={user.role} userName={user.name}>
       <div className="space-y-6">
         {/* Header */}
         <div className="border-b border-border pb-4">
