@@ -13,7 +13,6 @@ interface Product {
   id: number;
   name: string;
   sku: string;
-  category: string;
   price: number;
   description: string;
   stockQuantity: number;
@@ -40,7 +39,6 @@ const Products = () => {
       id: 1,
       name: 'Surgical Masks',
       sku: 'SM-001',
-      category: 'PPE',
       price: 0.85,
       description: 'Disposable surgical masks for medical use',
       stockQuantity: 45
@@ -49,7 +47,6 @@ const Products = () => {
       id: 2,
       name: 'Antibiotics - Amoxicillin',
       sku: 'AB-005',
-      category: 'Medication',
       price: 12.50,
       description: 'Broad-spectrum antibiotic medication',
       stockQuantity: 23
@@ -58,7 +55,6 @@ const Products = () => {
       id: 3,
       name: 'IV Bags (500ml)',
       sku: 'IV-500',
-      category: 'Supplies',
       price: 3.75,
       description: 'Intravenous fluid bags for patient care',
       stockQuantity: 78
@@ -79,7 +75,6 @@ const Products = () => {
   const [productFormData, setProductFormData] = useState<Omit<Product, 'id'>>({
     name: '',
     sku: '',
-    category: '',
     price: 0,
     description: '',
     stockQuantity: 0
@@ -94,7 +89,6 @@ const Products = () => {
       setProductFormData({
         name: product.name,
         sku: product.sku,
-        category: product.category,
         price: product.price,
         description: product.description,
         stockQuantity: product.stockQuantity
@@ -159,7 +153,6 @@ const Products = () => {
       setProductFormData({
         name: '',
         sku: '',
-        category: '',
         price: 0,
         description: '',
         stockQuantity: 0
@@ -239,7 +232,6 @@ const Products = () => {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -254,11 +246,6 @@ const Products = () => {
                         <div className="text-sm text-gray-500">SKU: {product.sku}</div>
                         <div className="text-sm text-gray-500">{product.description}</div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {product.category}
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       ${product.price.toFixed(2)}
@@ -409,16 +396,6 @@ const Products = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="product-category">Category *</Label>
-                  <Input
-                    id="product-category"
-                    value={productFormData.category}
-                    onChange={(e) => handleProductFormChange('category', e.target.value)}
-                    placeholder="Enter category"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
                   <Label htmlFor="product-price">Price *</Label>
                   <Input
                     id="product-price"
@@ -431,19 +408,18 @@ const Products = () => {
                     className="mt-1"
                   />
                 </div>
-              </div>
-
-              <div>
-                <Label htmlFor="product-stock">Stock Quantity *</Label>
-                <Input
-                  id="product-stock"
-                  type="number"
-                  min="0"
-                  value={productFormData.stockQuantity}
-                  onChange={(e) => handleProductFormChange('stockQuantity', parseInt(e.target.value) || 0)}
-                  placeholder="Enter stock quantity"
-                  className="mt-1"
-                />
+                <div>
+                  <Label htmlFor="product-stock">Stock Quantity *</Label>
+                  <Input
+                    id="product-stock"
+                    type="number"
+                    min="0"
+                    value={productFormData.stockQuantity}
+                    onChange={(e) => handleProductFormChange('stockQuantity', parseInt(e.target.value) || 0)}
+                    placeholder="Enter stock quantity"
+                    className="mt-1"
+                  />
+                </div>
               </div>
 
               <div>
@@ -467,7 +443,7 @@ const Products = () => {
                 </Button>
                 <Button 
                   onClick={handleSaveProduct}
-                  disabled={!productFormData.name || !productFormData.sku || !productFormData.category || productFormData.price < 0 || productFormData.stockQuantity < 0}
+                  disabled={!productFormData.name || !productFormData.sku || productFormData.price < 0 || productFormData.stockQuantity < 0}
                 >
                   {editingProduct ? 'Update Product' : 'Add Product'}
                 </Button>
