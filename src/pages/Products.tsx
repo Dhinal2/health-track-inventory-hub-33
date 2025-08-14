@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout';
 import { Plus, Download, Edit, Trash2, ShoppingCart } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
@@ -15,7 +16,6 @@ interface Product {
   category: string;
   price: number;
   description: string;
-  supplier: string;
   stockQuantity: number;
 }
 
@@ -43,7 +43,6 @@ const Products = () => {
       category: 'PPE',
       price: 0.85,
       description: 'Disposable surgical masks for medical use',
-      supplier: 'MedSupply Co.',
       stockQuantity: 45
     },
     {
@@ -53,7 +52,6 @@ const Products = () => {
       category: 'Medication',
       price: 12.50,
       description: 'Broad-spectrum antibiotic medication',
-      supplier: 'Pharma Direct',
       stockQuantity: 23
     },
     {
@@ -63,7 +61,6 @@ const Products = () => {
       category: 'Supplies',
       price: 3.75,
       description: 'Intravenous fluid bags for patient care',
-      supplier: 'Healthcare Plus',
       stockQuantity: 78
     }
   ]);
@@ -76,15 +73,50 @@ const Products = () => {
     remarks: ''
   });
 
+  // Add/Edit product modal states
+  const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productFormData, setProductFormData] = useState<Omit<Product, 'id'>>({
+    name: '',
+    sku: '',
+    category: '',
+    price: 0,
+    description: '',
+    stockQuantity: 0
+  });
+
+  // Delete confirmation modal state
+  const [deleteProductId, setDeleteProductId] = useState<number | null>(null);
+
   const handleEdit = (product: Product) => {
     if (user?.role === 'admin') {
-      console.log('Edit product:', product);
+      setEditingProduct(product);
+      setProductFormData({
+        name: product.name,
+        sku: product.sku,
+        category: product.category,
+        price: product.price,
+        description: product.description,
+        stockQuantity: product.stockQuantity
+      });
+      setIsAddEditModalOpen(true);
     }
   };
 
   const handleDelete = (productId: number) => {
     if (user?.role === 'admin') {
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      setDeleteProductId(productId);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (deleteProductId) {
+      setProducts(prev => prev.filter(p => p.id !== deleteProductId));
+      toast({
+        title: "Product deleted successfully",
+        description: "The product has been removed from your inventory.",
+      });
+      setDeleteProductId(null);
     }
   };
 
@@ -123,8 +155,52 @@ const Products = () => {
 
   const handleAddNew = () => {
     if (user?.role === 'admin') {
-      console.log('Add new product');
+      setEditingProduct(null);
+      setProductFormData({
+        name: '',
+        sku: '',
+        category: '',
+        price: 0,
+        description: '',
+        stockQuantity: 0
+      });
+      setIsAddEditModalOpen(true);
     }
+  };
+
+  const handleSaveProduct = () => {
+    if (editingProduct) {
+      // Edit existing product
+      setProducts(prev => prev.map(p => 
+        p.id === editingProduct.id 
+          ? { ...productFormData, id: editingProduct.id }
+          : p
+      ));
+      toast({
+        title: "Product updated successfully",
+        description: `${productFormData.name} has been updated.`,
+      });
+    } else {
+      // Add new product
+      const newProduct: Product = {
+        ...productFormData,
+        id: Math.max(...products.map(p => p.id)) + 1
+      };
+      setProducts(prev => [...prev, newProduct]);
+      toast({
+        title: "Product added successfully",
+        description: `${productFormData.name} has been added to your inventory.`,
+      });
+    }
+    setIsAddEditModalOpen(false);
+    setEditingProduct(null);
+  };
+
+  const handleProductFormChange = (field: keyof Omit<Product, 'id'>, value: string | number) => {
+    setProductFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   if (!user) {
@@ -166,7 +242,6 @@ const Products = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -194,9 +269,6 @@ const Products = () => {
                       }`}>
                         {product.stockQuantity} units
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.supplier}
                     </td>
                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                        <div className="flex items-center justify-end space-x-2">
@@ -303,6 +375,122 @@ const Products = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Add/Edit Product Modal */}
+        <Dialog open={isAddEditModalOpen} onOpenChange={setIsAddEditModalOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="product-name">Product Name *</Label>
+                  <Input
+                    id="product-name"
+                    value={productFormData.name}
+                    onChange={(e) => handleProductFormChange('name', e.target.value)}
+                    placeholder="Enter product name"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="product-sku">SKU *</Label>
+                  <Input
+                    id="product-sku"
+                    value={productFormData.sku}
+                    onChange={(e) => handleProductFormChange('sku', e.target.value)}
+                    placeholder="Enter SKU"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="product-category">Category *</Label>
+                  <Input
+                    id="product-category"
+                    value={productFormData.category}
+                    onChange={(e) => handleProductFormChange('category', e.target.value)}
+                    placeholder="Enter category"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="product-price">Price *</Label>
+                  <Input
+                    id="product-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productFormData.price}
+                    onChange={(e) => handleProductFormChange('price', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="product-stock">Stock Quantity *</Label>
+                <Input
+                  id="product-stock"
+                  type="number"
+                  min="0"
+                  value={productFormData.stockQuantity}
+                  onChange={(e) => handleProductFormChange('stockQuantity', parseInt(e.target.value) || 0)}
+                  placeholder="Enter stock quantity"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="product-description">Description</Label>
+                <Textarea
+                  id="product-description"
+                  value={productFormData.description}
+                  onChange={(e) => handleProductFormChange('description', e.target.value)}
+                  placeholder="Enter product description"
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsAddEditModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSaveProduct}
+                  disabled={!productFormData.name || !productFormData.sku || !productFormData.category || productFormData.price < 0 || productFormData.stockQuantity < 0}
+                >
+                  {editingProduct ? 'Update Product' : 'Add Product'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Modal */}
+        <AlertDialog open={deleteProductId !== null} onOpenChange={() => setDeleteProductId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Product</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this product? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>Yes</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
