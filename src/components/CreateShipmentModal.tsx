@@ -22,7 +22,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -48,7 +47,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     orderId: '',
-    supplier: '',
     destination: '',
     status: 'dispatched' as ShipmentStatus,
     estimatedDelivery: '',
@@ -76,7 +74,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (!formData.orderId.trim()) newErrors.orderId = 'Order ID is required';
-    if (!formData.supplier.trim()) newErrors.supplier = 'Supplier is required';
     if (!formData.destination.trim()) newErrors.destination = 'Destination is required';
     if (!formData.estimatedDelivery) newErrors.estimatedDelivery = 'Estimated delivery is required';
     
@@ -114,7 +111,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
     const shipmentData: Omit<Shipment, 'id' | 'lastUpdated'> = {
       orderId: formData.orderId,
-      supplier: formData.supplier,
       destination: formData.destination,
       status: formData.status,
       estimatedDelivery: formData.estimatedDelivery,
@@ -133,7 +129,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const handleClose = () => {
     setFormData({
       orderId: '',
-      supplier: '',
       destination: '',
       status: 'dispatched' as ShipmentStatus,
       estimatedDelivery: '',

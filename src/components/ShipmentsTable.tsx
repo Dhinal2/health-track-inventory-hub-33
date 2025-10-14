@@ -17,7 +17,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -91,7 +90,6 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
           <TableRow>
             <TableHead>Shipment ID</TableHead>
             <TableHead>Order ID</TableHead>
-            <TableHead>Supplier</TableHead>
             <TableHead>Destination</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Est. Delivery</TableHead>
@@ -111,7 +109,6 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>{shipment.orderId}</TableCell>
-              <TableCell>{shipment.supplier}</TableCell>
               <TableCell>{shipment.destination}</TableCell>
               <TableCell>
                 <Badge 

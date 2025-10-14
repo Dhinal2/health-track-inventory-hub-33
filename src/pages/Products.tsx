@@ -12,7 +12,6 @@ import { useToast } from '../hooks/use-toast';
 interface Product {
   id: number;
   name: string;
-  sku: string;
   price: number;
   description: string;
   stockQuantity: number;
@@ -38,7 +37,6 @@ const Products = () => {
     {
       id: 1,
       name: 'Surgical Masks',
-      sku: 'SM-001',
       price: 0.85,
       description: 'Disposable surgical masks for medical use',
       stockQuantity: 45
@@ -46,7 +44,6 @@ const Products = () => {
     {
       id: 2,
       name: 'Antibiotics - Amoxicillin',
-      sku: 'AB-005',
       price: 12.50,
       description: 'Broad-spectrum antibiotic medication',
       stockQuantity: 23
@@ -54,7 +51,6 @@ const Products = () => {
     {
       id: 3,
       name: 'IV Bags (500ml)',
-      sku: 'IV-500',
       price: 3.75,
       description: 'Intravenous fluid bags for patient care',
       stockQuantity: 78
@@ -74,7 +70,6 @@ const Products = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productFormData, setProductFormData] = useState<Omit<Product, 'id'>>({
     name: '',
-    sku: '',
     price: 0,
     description: '',
     stockQuantity: 0
@@ -85,10 +80,9 @@ const Products = () => {
 
   const handleEdit = (product: Product) => {
     if (user?.role === 'admin') {
-      setEditingProduct(product);
+    setEditingProduct(product);
       setProductFormData({
         name: product.name,
-        sku: product.sku,
         price: product.price,
         description: product.description,
         stockQuantity: product.stockQuantity
@@ -149,10 +143,9 @@ const Products = () => {
 
   const handleAddNew = () => {
     if (user?.role === 'admin') {
-      setEditingProduct(null);
+    setEditingProduct(null);
       setProductFormData({
         name: '',
-        sku: '',
         price: 0,
         description: '',
         stockQuantity: 0
@@ -231,21 +224,25 @@ const Products = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Quantity</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {products.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                        <div className="text-sm text-gray-500">SKU: {product.sku}</div>
-                        <div className="text-sm text-gray-500">{product.description}</div>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {product.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {product.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {product.description}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       ${product.price.toFixed(2)}
@@ -306,7 +303,6 @@ const Products = () => {
               <div className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-medium text-gray-900">{selectedProduct.name}</h4>
-                  <p className="text-sm text-gray-600">SKU: {selectedProduct.sku}</p>
                   <p className="text-sm text-gray-600">Price: ${selectedProduct.price.toFixed(2)}</p>
                   <p className="text-sm text-gray-600">Available: {selectedProduct.stockQuantity} units</p>
                 </div>
@@ -371,27 +367,27 @@ const Products = () => {
             </DialogHeader>
             
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="product-name">Product Name *</Label>
-                  <Input
-                    id="product-name"
-                    value={productFormData.name}
-                    onChange={(e) => handleProductFormChange('name', e.target.value)}
-                    placeholder="Enter product name"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="product-sku">SKU *</Label>
-                  <Input
-                    id="product-sku"
-                    value={productFormData.sku}
-                    onChange={(e) => handleProductFormChange('sku', e.target.value)}
-                    placeholder="Enter SKU"
-                    className="mt-1"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="product-name">Product Name *</Label>
+                <Input
+                  id="product-name"
+                  value={productFormData.name}
+                  onChange={(e) => handleProductFormChange('name', e.target.value)}
+                  placeholder="Enter product name"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="product-description">Description</Label>
+                <Textarea
+                  id="product-description"
+                  value={productFormData.description}
+                  onChange={(e) => handleProductFormChange('description', e.target.value)}
+                  placeholder="Enter product description"
+                  className="mt-1"
+                  rows={3}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -422,18 +418,6 @@ const Products = () => {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="product-description">Description</Label>
-                <Textarea
-                  id="product-description"
-                  value={productFormData.description}
-                  onChange={(e) => handleProductFormChange('description', e.target.value)}
-                  placeholder="Enter product description"
-                  className="mt-1"
-                  rows={3}
-                />
-              </div>
-
               <div className="flex justify-end space-x-3 pt-4">
                 <Button 
                   variant="outline" 
@@ -443,7 +427,7 @@ const Products = () => {
                 </Button>
                 <Button 
                   onClick={handleSaveProduct}
-                  disabled={!productFormData.name || !productFormData.sku || productFormData.price < 0 || productFormData.stockQuantity < 0}
+                  disabled={!productFormData.name || productFormData.price < 0 || productFormData.stockQuantity < 0}
                 >
                   {editingProduct ? 'Update Product' : 'Add Product'}
                 </Button>

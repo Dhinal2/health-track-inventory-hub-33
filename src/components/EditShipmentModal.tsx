@@ -22,7 +22,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -50,7 +49,6 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     orderId: '',
-    supplier: '',
     destination: '',
     status: 'dispatched' as ShipmentStatus,
     estimatedDelivery: '',
@@ -71,7 +69,6 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
     if (shipment) {
       setFormData({
         orderId: shipment.orderId,
-        supplier: shipment.supplier,
         destination: shipment.destination,
         status: shipment.status,
         estimatedDelivery: shipment.estimatedDelivery,

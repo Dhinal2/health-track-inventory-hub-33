@@ -24,7 +24,6 @@ interface Order {
   id: string;
   placedBy: string;
   userId: string;
-  department: string;
   status: OrderStatus;
   totalAmount: number;
   orderDate: string;
@@ -72,7 +71,6 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
           <TableRow>
             <TableHead>Order ID</TableHead>
             <TableHead>Placed By</TableHead>
-            {userRole === 'admin' && <TableHead>Department</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead>Total Amount</TableHead>
             <TableHead>Order Date</TableHead>
@@ -84,7 +82,6 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
             <TableRow key={order.id}>
               <TableCell className="font-medium">{order.id}</TableCell>
               <TableCell>{order.placedBy}</TableCell>
-              {userRole === 'admin' && <TableCell>{order.department}</TableCell>}
               <TableCell>
                 <Badge 
                   variant={getStatusBadgeVariant(order.status) as any}

@@ -61,7 +61,6 @@ export const ReorderModal: React.FC<ReorderModalProps> = ({
               </div>
               <div>
                 <h3 className="font-medium text-gray-900">{item.name}</h3>
-                <p className="text-sm text-gray-500">SKU: {item.sku}</p>
               </div>
             </div>
             
@@ -77,10 +76,6 @@ export const ReorderModal: React.FC<ReorderModalProps> = ({
               <div>
                 <span className="text-gray-500">Unit Price:</span>
                 <p className="font-medium">${item.unitPrice.toFixed(2)}</p>
-              </div>
-              <div>
-                <span className="text-gray-500">Supplier:</span>
-                <p className="font-medium">{item.supplier}</p>
               </div>
             </div>
           </div>

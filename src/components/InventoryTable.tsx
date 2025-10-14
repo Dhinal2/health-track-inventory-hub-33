@@ -36,8 +36,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ items, userRole,
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
               {userRole === 'admin' && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auto Reorder</th>
@@ -65,12 +63,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ items, userRole,
                           <AlertTriangle className="w-4 h-4 text-red-500 ml-2" />
                         )}
                       </div>
-                      <div className="text-sm text-gray-500">SKU: {item.sku}</div>
-                      <div className="text-xs">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                          {item.category}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 </td>
@@ -90,30 +82,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ items, userRole,
                       </span>
                     )}
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                    <div className="flex flex-col">
-                      <span className={`text-sm ${
-                        isExpired(item.expiryDate) ? 'text-red-600 font-medium' :
-                        isExpiringSoon(item.expiryDate) ? 'text-orange-600 font-medium' :
-                        'text-gray-900'
-                      }`}>
-                        {formatDate(item.expiryDate)}
-                      </span>
-                      {isExpired(item.expiryDate) && (
-                        <span className="text-xs text-red-600">Expired</span>
-                      )}
-                      {isExpiringSoon(item.expiryDate) && !isExpired(item.expiryDate) && (
-                        <span className="text-xs text-orange-600">Expiring Soon</span>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{item.supplier}</div>
-                  <div className="text-xs text-gray-500">Batch: {item.batchNumber}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">${item.unitPrice.toFixed(2)}</div>

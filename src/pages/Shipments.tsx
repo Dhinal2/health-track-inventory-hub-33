@@ -15,7 +15,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -56,7 +55,6 @@ const Shipments = () => {
     {
       id: 'SHP-001',
       orderId: 'ORD-001',
-      supplier: 'MedSupply Co.',
       destination: 'City General Hospital',
       status: 'in-transit' as ShipmentStatus,
       estimatedDelivery: '2024-01-18',
@@ -71,7 +69,6 @@ const Shipments = () => {
     {
       id: 'SHP-002',
       orderId: 'ORD-002',
-      supplier: 'Healthcare Supplies Ltd.',
       destination: 'Metro Medical Center',
       status: 'delivered' as ShipmentStatus,
       estimatedDelivery: '2024-01-15',
@@ -86,7 +83,6 @@ const Shipments = () => {
     {
       id: 'SHP-003',
       orderId: 'ORD-003',
-      supplier: 'PharmaDirect',
       destination: 'Regional Health System',
       status: 'dispatched' as ShipmentStatus,
       estimatedDelivery: '2024-01-20',
@@ -147,7 +143,6 @@ const Shipments = () => {
       filtered = filtered.filter(shipment => 
         shipment.id.toLowerCase().includes(filters.search.toLowerCase()) ||
         shipment.orderId.toLowerCase().includes(filters.search.toLowerCase()) ||
-        shipment.supplier.toLowerCase().includes(filters.search.toLowerCase()) ||
         shipment.destination.toLowerCase().includes(filters.search.toLowerCase())
       );
     }
@@ -168,11 +163,10 @@ const Shipments = () => {
   }, [shipments, filters]);
 
   const handleExportCSV = () => {
-    const headers = ['Shipment ID', 'Order ID', 'Supplier', 'Destination', 'Status', 'Estimated Delivery', 'Last Updated'];
+    const headers = ['Shipment ID', 'Order ID', 'Destination', 'Status', 'Estimated Delivery', 'Last Updated'];
     const csvData = filteredShipments.map(shipment => [
       shipment.id,
       shipment.orderId,
-      shipment.supplier,
       shipment.destination,
       shipment.status,
       shipment.estimatedDelivery,

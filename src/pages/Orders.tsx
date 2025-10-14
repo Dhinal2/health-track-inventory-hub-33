@@ -15,7 +15,6 @@ interface Order {
   id: string;
   placedBy: string;
   userId: string;
-  department: string;
   status: OrderStatus;
   totalAmount: number;
   orderDate: string;
@@ -31,7 +30,6 @@ interface Order {
 type FilterState = {
   search: string;
   status: OrderStatus | 'all';
-  department: string;
   dateFrom: string;
   dateTo: string;
 };
@@ -58,7 +56,6 @@ const Orders = () => {
       id: 'ORD-001',
       placedBy: 'Dr. Emily Chen',
       userId: 'user123',
-      department: 'Emergency',
       status: 'pending' as OrderStatus,
       totalAmount: 245.50,
       orderDate: '2024-01-15',
@@ -83,7 +80,6 @@ const Orders = () => {
       id: 'ORD-002',  
       placedBy: 'Nurse John Davis',
       userId: 'user456',
-      department: 'ICU',
       status: 'approved' as OrderStatus,
       totalAmount: 150.00,
       orderDate: '2024-01-14',
@@ -101,7 +97,6 @@ const Orders = () => {
       id: 'ORD-003',
       placedBy: 'Dr. Sarah Johnson',
       userId: 'user789',
-      department: 'Surgery',
       status: 'delivered' as OrderStatus,
       totalAmount: 89.99,
       orderDate: '2024-01-13',
@@ -120,7 +115,6 @@ const Orders = () => {
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     status: 'all',
-    department: '',
     dateFrom: '',
     dateTo: ''
   });
@@ -142,12 +136,11 @@ const Orders = () => {
     });
   };
 
-  const handleOrderCreate = (orderData: { department: string; items: any[] }) => {
+  const handleOrderCreate = (orderData: { items: any[] }) => {
     const newOrder: Order = {
       id: `ORD-${(orders.length + 1).toString().padStart(3, '0')}`,
       placedBy: user?.name || 'User',
       userId: 'current-user',
-      department: orderData.department,
       status: 'pending' as OrderStatus,
       totalAmount: orderData.items.reduce((sum, item) => sum + item.total, 0),
       orderDate: new Date().toISOString().split('T')[0],
@@ -178,10 +171,6 @@ const Orders = () => {
       filtered = filtered.filter(order => order.status === filters.status);
     }
 
-    if (filters.department) {
-      filtered = filtered.filter(order => order.department === filters.department);
-    }
-
     if (filters.dateFrom) {
       filtered = filtered.filter(order => order.orderDate >= filters.dateFrom);
     }
@@ -194,11 +183,10 @@ const Orders = () => {
   }, [orders, filters, user?.role]);
 
   const handleExportCSV = () => {
-    const headers = ['Order ID', 'Placed By', 'Department', 'Status', 'Total Amount', 'Order Date'];
+    const headers = ['Order ID', 'Placed By', 'Status', 'Total Amount', 'Order Date'];
     const csvData = filteredOrders.map(order => [
       order.id,
       order.placedBy,
-      order.department,
       order.status,
       order.totalAmount.toFixed(2),
       order.orderDate

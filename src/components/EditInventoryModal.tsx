@@ -18,14 +18,9 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<Partial<InventoryItem>>({
     name: '',
-    sku: '',
-    category: 'PPE',
     stockQuantity: 0,
     reorderThreshold: 0,
-    expiryDate: '',
-    supplier: '',
     unitPrice: 0,
-    batchNumber: '',
     autoReorder: false
   });
 
@@ -35,14 +30,9 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
     } else {
       setFormData({
         name: '',
-        sku: '',
-        category: 'PPE',
         stockQuantity: 0,
         reorderThreshold: 0,
-        expiryDate: '',
-        supplier: '',
         unitPrice: 0,
-        batchNumber: '',
         autoReorder: false
       });
     }
@@ -54,14 +44,9 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
     const itemToSave: InventoryItem = {
       id: item?.id || Date.now(),
       name: formData.name || '',
-      sku: formData.sku || '',
-      category: formData.category || 'PPE',
       stockQuantity: formData.stockQuantity || 0,
       reorderThreshold: formData.reorderThreshold || 0,
-      expiryDate: formData.expiryDate || '',
-      supplier: formData.supplier || '',
       unitPrice: formData.unitPrice || 0,
-      batchNumber: formData.batchNumber || '',
       autoReorder: formData.autoReorder || false
     };
     
@@ -115,46 +100,16 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                SKU *
+                Unit Price *
               </label>
               <input
-                type="text"
-                name="sku"
-                value={formData.sku}
+                type="number"
+                name="unitPrice"
+                value={formData.unitPrice}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Category *
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="PPE">PPE</option>
-                <option value="Medication">Medication</option>
-                <option value="Supplies">Supplies</option>
-                <option value="Medical Device">Medical Device</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Supplier *
-              </label>
-              <input
-                type="text"
-                name="supplier"
-                value={formData.supplier}
-                onChange={handleChange}
-                required
+                min="0"
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -185,49 +140,6 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
                 onChange={handleChange}
                 required
                 min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Expiry Date *
-              </label>
-              <input
-                type="date"
-                name="expiryDate"
-                value={formData.expiryDate}
-                onChange={handleChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Unit Price *
-              </label>
-              <input
-                type="number"
-                name="unitPrice"
-                value={formData.unitPrice}
-                onChange={handleChange}
-                required
-                min="0"
-                step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Batch Number
-              </label>
-              <input
-                type="text"
-                name="batchNumber"
-                value={formData.batchNumber}
-                onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>

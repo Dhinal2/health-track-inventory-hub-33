@@ -15,7 +15,6 @@ type OrderStatus = 'pending' | 'approved' | 'rejected' | 'delivered';
 type FilterState = {
   search: string;
   status: OrderStatus | 'all';
-  department: string;
   dateFrom: string;
   dateTo: string;
 };
@@ -41,7 +40,6 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
     onFiltersChange({
       search: '',
       status: 'all',
-      department: '',
       dateFrom: '',
       dateTo: ''
     });
@@ -75,23 +73,6 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
             <SelectItem value="delivered">Delivered</SelectItem>
           </SelectContent>
         </Select>
-
-        {userRole === 'admin' && (
-          <Select 
-            value={filters.department || 'all-departments'} 
-            onValueChange={(value) => handleFilterChange('department', value === 'all-departments' ? '' : value)}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all-departments">All Departments</SelectItem>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
 
         <div className="flex items-center gap-2">
           <Input
