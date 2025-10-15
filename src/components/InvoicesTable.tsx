@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Eye, Download, MoreHorizontal, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Eye, Download, MoreHorizontal, CheckCircle, Clock, AlertCircle, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 
 type PaymentStatus = 'paid' | 'unpaid' | 'partially_paid' | 'overdue';
@@ -30,6 +30,8 @@ interface Invoice {
   dateIssued: string;
   dueDate: string;
   grandTotal: number;
+  amountPaid?: number;
+  outstandingBalance?: number;
 }
 
 interface InvoicesTableProps {
@@ -90,6 +92,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
               <TableHead>Customer</TableHead>
               <TableHead>Facility</TableHead>
               <TableHead>Amount</TableHead>
+              <TableHead>Outstanding</TableHead>
               <TableHead>Payment Status</TableHead>
               <TableHead>Date Issued</TableHead>
               <TableHead>Due Date</TableHead>
@@ -117,6 +120,15 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                   ${invoice.grandTotal.toFixed(2)}
                 </TableCell>
                 <TableCell>
+                  {invoice.paymentStatus === 'paid' ? (
+                    <span className="text-muted-foreground">$0.00</span>
+                  ) : (
+                    <span className="font-medium text-foreground">
+                      ${(invoice.outstandingBalance || invoice.grandTotal).toFixed(2)}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center space-x-2">
                     {getStatusIcon(invoice.paymentStatus)}
                     <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus) as any}>
@@ -132,7 +144,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end space-x-2">
-                    {userRole === 'staff' && invoice.paymentStatus === 'unpaid' && (
+                    {userRole === 'staff' && invoice.paymentStatus !== 'paid' && (
                       <Button
                         size="sm"
                         onClick={(e) => {
@@ -140,6 +152,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                           onPayNow(invoice);
                         }}
                       >
+                        <CreditCard className="w-4 h-4 mr-2" />
                         Pay Now
                       </Button>
                     )}

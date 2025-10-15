@@ -7,7 +7,7 @@ import { InvoicesTable } from '@/components/InvoicesTable';
 import { InvoiceDetailsModal } from '@/components/InvoiceDetailsModal';
 import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 type PaymentStatus = 'paid' | 'unpaid' | 'partially_paid' | 'overdue';
 
@@ -29,6 +29,8 @@ interface Invoice {
   }>;
   tax: number;
   grandTotal: number;
+  amountPaid?: number;
+  outstandingBalance?: number;
   customerDetails: {
     name: string;
     address: string;
@@ -66,6 +68,7 @@ const Invoices = () => {
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Mock invoices data
   const [invoices, setInvoices] = useState<Invoice[]>([
@@ -96,6 +99,8 @@ const Invoices = () => {
       ],
       tax: 24.55,
       grandTotal: 270.05,
+      amountPaid: 270.05,
+      outstandingBalance: 0,
       customerDetails: {
         name: 'City General Hospital',
         address: '123 Medical Center Dr, Health City, HC 12345',
@@ -131,6 +136,8 @@ const Invoices = () => {
       ],
       tax: 15.00,
       grandTotal: 165.00,
+      amountPaid: 0,
+      outstandingBalance: 165.00,
       customerDetails: {
         name: 'Regional Medical Center',
         address: '456 Healthcare Blvd, Med City, MC 67890',
@@ -160,6 +167,8 @@ const Invoices = () => {
       ],
       tax: 9.00,
       grandTotal: 98.95,
+      amountPaid: 50.00,
+      outstandingBalance: 48.95,
       customerDetails: {
         name: 'Community Clinic',
         address: '789 Community St, Small Town, ST 11111',
@@ -187,6 +196,41 @@ const Invoices = () => {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+
+  // Check for payment updates from navigation state
+  useEffect(() => {
+    const state = location.state as { updatedInvoiceId?: string; newStatus?: PaymentStatus; paymentAmount?: number } | undefined;
+    if (state?.updatedInvoiceId && state?.newStatus) {
+      const paymentAmount = state.paymentAmount || 0;
+      
+      setInvoices(prev => prev.map(invoice => {
+        if (invoice.id === state.updatedInvoiceId) {
+          const currentPaid = invoice.amountPaid || 0;
+          const newAmountPaid = currentPaid + paymentAmount;
+          const outstandingBalance = invoice.grandTotal - newAmountPaid;
+          
+          return {
+            ...invoice,
+            paymentStatus: state.newStatus,
+            amountPaid: newAmountPaid,
+            outstandingBalance: outstandingBalance > 0 ? outstandingBalance : 0,
+            paymentHistory: [
+              ...invoice.paymentHistory,
+              {
+                date: new Date().toISOString().split('T')[0],
+                amount: paymentAmount,
+                method: 'Credit Card'
+              }
+            ]
+          };
+        }
+        return invoice;
+      }));
+
+      // Clear the navigation state
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   const handlePaymentStatusUpdate = (invoiceId: string, newStatus: PaymentStatus) => {
     setInvoices(prev => prev.map(invoice => 
