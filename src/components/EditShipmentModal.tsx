@@ -96,7 +96,6 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (!formData.orderId.trim()) newErrors.orderId = 'Order ID is required';
-    if (!formData.supplier.trim()) newErrors.supplier = 'Supplier is required';
     if (!formData.destination.trim()) newErrors.destination = 'Destination is required';
     if (!formData.estimatedDelivery) newErrors.estimatedDelivery = 'Estimated delivery is required';
     
@@ -135,7 +134,6 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
     const updatedShipment: Shipment = {
       ...shipment,
       orderId: formData.orderId,
-      supplier: formData.supplier,
       destination: formData.destination,
       status: formData.status,
       estimatedDelivery: formData.estimatedDelivery,
@@ -179,16 +177,6 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
                   placeholder="e.g., ORD-001"
                 />
                 {errors.orderId && <p className="text-sm text-red-600 mt-1">{errors.orderId}</p>}
-              </div>
-              <div>
-                <Label htmlFor="supplier">Supplier</Label>
-                <Input
-                  id="supplier"
-                  value={formData.supplier}
-                  onChange={(e) => handleInputChange('supplier', e.target.value)}
-                  placeholder="e.g., MedSupply Co."
-                />
-                {errors.supplier && <p className="text-sm text-red-600 mt-1">{errors.supplier}</p>}
               </div>
               <div>
                 <Label htmlFor="destination">Destination</Label>

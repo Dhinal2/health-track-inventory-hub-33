@@ -25,7 +25,6 @@ interface Order {
   id: string;
   placedBy: string;
   userId: string;
-  department: string;
   status: OrderStatus;
   totalAmount: number;
   orderDate: string;
@@ -108,10 +107,6 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                 <div className="flex justify-between">
                   <span className="text-gray-600">Placed By:</span>
                   <span className="font-medium">{order.placedBy}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Department:</span>
-                  <span className="font-medium">{order.department}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Order Date:</span>

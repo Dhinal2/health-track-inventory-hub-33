@@ -45,7 +45,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -107,7 +106,6 @@ export const ShipmentMap: React.FC<ShipmentMapProps> = ({ shipment }) => {
           <div className="text-sm">
             <h4 className="font-medium text-green-600">Origin</h4>
             <p>{shipment.originAddress}</p>
-            <p className="text-xs text-gray-500 mt-1">Supplier: {shipment.supplier}</p>
           </div>
         </Popup>
       </Marker>

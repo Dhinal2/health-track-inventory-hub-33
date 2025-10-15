@@ -169,16 +169,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 {errors.orderId && <p className="text-sm text-red-600 mt-1">{errors.orderId}</p>}
               </div>
               <div>
-                <Label htmlFor="supplier">Supplier</Label>
-                <Input
-                  id="supplier"
-                  value={formData.supplier}
-                  onChange={(e) => handleInputChange('supplier', e.target.value)}
-                  placeholder="e.g., MedSupply Co."
-                />
-                {errors.supplier && <p className="text-sm text-red-600 mt-1">{errors.supplier}</p>}
-              </div>
-              <div>
                 <Label htmlFor="destination">Destination</Label>
                 <Input
                   id="destination"

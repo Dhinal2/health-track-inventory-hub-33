@@ -14,7 +14,6 @@ type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
 interface Shipment {
   id: string;
   orderId: string;
-  supplier: string;
   destination: string;
   status: ShipmentStatus;
   estimatedDelivery: string;
@@ -72,10 +71,6 @@ export const TrackShipmentModal: React.FC<TrackShipmentModalProps> = ({
               <Badge className={getStatusColor(shipment.status)}>
                 {shipment.status.charAt(0).toUpperCase() + shipment.status.slice(1).replace('-', ' ')}
               </Badge>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Supplier</p>
-              <p className="font-medium">{shipment.supplier}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Destination</p>
