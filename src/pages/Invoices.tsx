@@ -7,6 +7,7 @@ import { InvoicesTable } from '@/components/InvoicesTable';
 import { InvoiceDetailsModal } from '@/components/InvoiceDetailsModal';
 import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 type PaymentStatus = 'paid' | 'unpaid' | 'partially_paid' | 'overdue';
 
@@ -64,6 +65,7 @@ const Invoices = () => {
   }, []);
 
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Mock invoices data
   const [invoices, setInvoices] = useState<Invoice[]>([
@@ -293,6 +295,10 @@ const Invoices = () => {
     });
   };
 
+  const handlePayNow = (invoice: Invoice) => {
+    navigate('/payment', { state: { invoice } });
+  };
+
   const getPaymentStatusBadgeVariant = (status: PaymentStatus) => {
     switch (status) {
       case 'paid': return 'default';
@@ -349,9 +355,11 @@ const Invoices = () => {
 
         <InvoicesTable
           invoices={filteredInvoices}
+          userRole={user.role}
           onPaymentStatusUpdate={handlePaymentStatusUpdate}
           onViewDetails={handleViewDetails}
           onDownloadPDF={handleDownloadPDF}
+          onPayNow={handlePayNow}
           getPaymentStatusBadgeVariant={getPaymentStatusBadgeVariant}
         />
 

@@ -11,7 +11,6 @@ export interface InventoryItem {
   name: string;
   stockQuantity: number;
   reorderThreshold: number;
-  unitPrice: number;
   autoReorder?: boolean;
 }
 
@@ -35,7 +34,6 @@ const Inventory = () => {
       name: 'Surgical Masks',
       stockQuantity: 45,
       reorderThreshold: 100,
-      unitPrice: 0.85,
       autoReorder: true
     },
     {
@@ -43,7 +41,6 @@ const Inventory = () => {
       name: 'Antibiotics - Amoxicillin',
       stockQuantity: 23,
       reorderThreshold: 50,
-      unitPrice: 12.50,
       autoReorder: false
     },
     {
@@ -51,7 +48,6 @@ const Inventory = () => {
       name: 'IV Bags (500ml)',
       stockQuantity: 78,
       reorderThreshold: 150,
-      unitPrice: 3.75,
       autoReorder: true
     },
     {
@@ -59,7 +55,6 @@ const Inventory = () => {
       name: 'Latex Gloves (Box)',
       stockQuantity: 12,
       reorderThreshold: 25,
-      unitPrice: 15.99,
       autoReorder: false
     },
     {
@@ -67,7 +62,6 @@ const Inventory = () => {
       name: 'Insulin Syringes',
       stockQuantity: 156,
       reorderThreshold: 100,
-      unitPrice: 0.45,
       autoReorder: true
     }
   ]);

@@ -38,8 +38,6 @@ export const ReorderModal: React.FC<ReorderModalProps> = ({
   const estimatedDelivery = new Date();
   estimatedDelivery.setDate(estimatedDelivery.getDate() + 7); // Assume 7 days delivery
 
-  const totalCost = quantity * item.unitPrice;
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
@@ -73,10 +71,6 @@ export const ReorderModal: React.FC<ReorderModalProps> = ({
                 <span className="text-gray-500">Reorder Threshold:</span>
                 <p className="font-medium">{item.reorderThreshold}</p>
               </div>
-              <div>
-                <span className="text-gray-500">Unit Price:</span>
-                <p className="font-medium">${item.unitPrice.toFixed(2)}</p>
-              </div>
             </div>
           </div>
 
@@ -102,11 +96,6 @@ export const ReorderModal: React.FC<ReorderModalProps> = ({
               <Calendar className="w-4 h-4 text-blue-600 mr-2" />
               <span className="text-gray-600">Estimated Delivery:</span>
               <span className="ml-auto font-medium">{estimatedDelivery.toLocaleDateString()}</span>
-            </div>
-            <div className="flex items-center text-sm">
-              <Truck className="w-4 h-4 text-blue-600 mr-2" />
-              <span className="text-gray-600">Total Cost:</span>
-              <span className="ml-auto font-medium">${totalCost.toFixed(2)}</span>
             </div>
           </div>
 

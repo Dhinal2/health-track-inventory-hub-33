@@ -93,7 +93,6 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
             <TableHead>Destination</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Est. Delivery</TableHead>
-            <TableHead>Last Updated</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -122,9 +121,6 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
                 <span className={isOverdue(shipment.estimatedDelivery, shipment.status) ? 'text-red-600 font-medium' : ''}>
                   {formatDate(shipment.estimatedDelivery)}
                 </span>
-              </TableCell>
-              <TableCell className="text-sm text-gray-500">
-                {formatTimestamp(shipment.lastUpdated)}
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">

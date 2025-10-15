@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
+import Payment from "./pages/Payment";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <Route path="/orders" element={<AuthGuard><Orders /></AuthGuard>} />
           <Route path="/shipments" element={<AuthGuard><Shipments /></AuthGuard>} />
           <Route path="/invoices" element={<AuthGuard><Invoices /></AuthGuard>} />
+          <Route path="/payment" element={<AuthGuard><Payment /></AuthGuard>} />
           <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
           <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
           <Route path="*" element={<NotFound />} />

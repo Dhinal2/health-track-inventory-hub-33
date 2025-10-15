@@ -36,7 +36,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ items, userRole,
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
               {userRole === 'admin' && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auto Reorder</th>
               )}
@@ -82,9 +81,6 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ items, userRole,
                       </span>
                     )}
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">${item.unitPrice.toFixed(2)}</div>
                 </td>
                 {userRole === 'admin' && (
                   <td className="px-6 py-4 whitespace-nowrap">

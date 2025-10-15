@@ -34,17 +34,21 @@ interface Invoice {
 
 interface InvoicesTableProps {
   invoices: Invoice[];
+  userRole: 'admin' | 'staff';
   onPaymentStatusUpdate: (invoiceId: string, newStatus: PaymentStatus) => void;
   onViewDetails: (invoice: Invoice) => void;
   onDownloadPDF: (invoice: Invoice) => void;
+  onPayNow: (invoice: Invoice) => void;
   getPaymentStatusBadgeVariant: (status: PaymentStatus) => string;
 }
 
 export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   invoices,
+  userRole,
   onPaymentStatusUpdate,
   onViewDetails,
   onDownloadPDF,
+  onPayNow,
   getPaymentStatusBadgeVariant,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -128,6 +132,17 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end space-x-2">
+                    {userRole === 'staff' && invoice.paymentStatus === 'unpaid' && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPayNow(invoice);
+                        }}
+                      >
+                        Pay Now
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -148,7 +163,8 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                     >
                       <Download className="w-4 h-4" />
                     </Button>
-                    <DropdownMenu>
+                    {userRole === 'admin' && (
+                      <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
                           variant="ghost" 
@@ -188,6 +204,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
