@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Dashboard } from '../components/Dashboard';
@@ -10,9 +9,13 @@ const Index = () => {
     const userData = localStorage.getItem('user');
     if (userData) {
       const parsedUser = JSON.parse(userData);
+      
+      // THE FIX: Correctly read 'Role' (uppercase) and map it
+      const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
+
       setUser({
-        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
-        role: parsedUser.role || 'staff'
+        name: parsedUser.Name || 'User',
+        role: mappedRole
       });
     }
   }, []);

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -22,69 +21,50 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Hardcoded dummy users for testing role-based access
-    const dummyUsers = [
-      { email: 'admin@gmail.com', password: 'Admin', role: 'admin' },
-      { email: 'staff@gmail.com', password: 'Staff', role: 'staff' }
-    ];
+    // Map the role to the format expected by the backend ('Administrator' or 'Healthcare Staff')
+    const roleToSend = role === 'admin' ? 'Administrator' : 'Healthcare Staff';
 
-    setTimeout(() => {
-      // Check against hardcoded users
-      const user = dummyUsers.find(
-        u => u.email === email && u.password === password && u.role === role
-      );
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password,
+          role: roleToSend, // Send the correctly formatted role
+        }),
+      });
 
-      if (user) {
-        // Store user data in localStorage
-        localStorage.setItem('user', JSON.stringify({
-          email: user.email,
-          role: user.role,
-          name: user.email.split('@')[0]
-        }));
+      if (response.ok) {
+        const user = await response.json();
+        // Store user data from the backend in localStorage
+        localStorage.setItem('user', JSON.stringify(user));
         
         toast({
           title: "Login Successful",
-          description: `Welcome back! Logged in as ${role === 'admin' ? 'Administrator' : 'Healthcare Staff'}.`,
+          description: `Welcome back, ${user.name}!`,
         });
         
-        navigate('/');
+        navigate('/'); // Redirect to the dashboard
       } else {
+        const errorData = await response.json();
         toast({
           title: "Login Failed",
-          description: "Invalid email, password, or role combination.",
+          description: errorData.message || "Invalid email, password, or role combination.",
           variant: "destructive",
         });
       }
+    } catch (error) {
+      toast({
+        title: "Network Error",
+        description: "Could not connect to the server. Please ensure the backend is running.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
-
-    /* Original backend authentication code - commented out for hardcoded testing
-    // Mock authentication - replace with actual backend later
-    setTimeout(() => {
-      if (email && password) {
-        // Store user data in localStorage for now
-        localStorage.setItem('user', JSON.stringify({
-          email,
-          role,
-          name: email.split('@')[0]
-        }));
-        
-        toast({
-          title: "Login Successful",
-          description: `Welcome back! Logged in as ${role}.`,
-        });
-        
-        navigate('/');
-      } else {
-        toast({
-          title: "Login Failed",
-          description: "Please enter valid credentials.",
-          variant: "destructive",
-        });
-      }
-      setIsLoading(false);
-    }, 1000);
-    */
+    }
   };
 
   return (

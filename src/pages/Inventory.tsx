@@ -2,179 +2,192 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { InventoryTable } from '../components/InventoryTable';
 import { InventoryFilters } from '../components/InventoryFilters';
-import { EditInventoryModal } from '../components/EditInventoryModal';
 import { ReorderModal } from '../components/ReorderModal';
-import { Plus, Download } from 'lucide-react';
+import { ConfigurationModal } from '../components/ConfigurationModal';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export interface InventoryItem {
+  InventoryID: number;
+  ProductID: number;
+  Price: number;
+  Name: string;
+  Owner?: string;
+  StockQuantity: number;
+  ReorderThreshold: number;
+  AutoReorder: boolean;
   id: number;
   name: string;
-  stockQuantity: number;
-  reorderThreshold: number;
-  autoReorder?: boolean;
 }
 
 const Inventory = () => {
-  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+  const { toast } = useToast();
+  const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff'; rawRole: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
-        role: parsedUser.role || 'staff'
-      });
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser.UserID) {
+          const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
+          const currentUser = {
+            id: parsedUser.UserID,
+            name: parsedUser.Name,
+            role: mappedRole,
+            rawRole: parsedUser.Role
+          };
+          setUser(currentUser);
+          fetchInventory(currentUser.id, currentUser.rawRole);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to parse user data:", error);
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
     }
   }, []);
 
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([
-    {
-      id: 1,
-      name: 'Surgical Masks',
-      stockQuantity: 45,
-      reorderThreshold: 100,
-      autoReorder: true
-    },
-    {
-      id: 2,
-      name: 'Antibiotics - Amoxicillin',
-      stockQuantity: 23,
-      reorderThreshold: 50,
-      autoReorder: false
-    },
-    {
-      id: 3,
-      name: 'IV Bags (500ml)',
-      stockQuantity: 78,
-      reorderThreshold: 150,
-      autoReorder: true
-    },
-    {
-      id: 4,
-      name: 'Latex Gloves (Box)',
-      stockQuantity: 12,
-      reorderThreshold: 25,
-      autoReorder: false
-    },
-    {
-      id: 5,
-      name: 'Insulin Syringes',
-      stockQuantity: 156,
-      reorderThreshold: 100,
-      autoReorder: true
-    }
-  ]);
-
-  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>(inventoryItems);
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
-
-  const handleEdit = (item: InventoryItem) => {
-    if (user?.role === 'admin') {
-      setSelectedItem(item);
-      setIsModalOpen(true);
+  const fetchInventory = async (userId: number, userRole: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/inventory/user-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userRole })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedData = data.map((item: any) => ({ ...item, id: item.InventoryID, name: item.Name }));
+        setInventoryItems(mappedData);
+        setFilteredItems(mappedData);
+      } else {
+        setInventoryItems([]);
+        setFilteredItems([]);
+      }
+    } catch (error) {
+      toast({ title: 'Network Error', description: 'Could not connect to the server.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleReorder = (item: InventoryItem) => {
-    setSelectedItem(item);
-    setIsReorderModalOpen(true);
+    if (user?.role === 'staff') {
+      setSelectedItem(item);
+      setIsReorderModalOpen(true);
+    }
+  };
+  
+  const handleConfigure = (item: InventoryItem) => {
+    if (user?.role === 'staff') {
+      setSelectedItem(item);
+      setIsConfigModalOpen(true);
+    }
   };
 
-  const handleSave = (updatedItem: InventoryItem) => {
-    setInventoryItems(prev => 
-      prev.map(item => item.id === updatedItem.id ? updatedItem : item)
-    );
-    setFilteredItems(prev => 
-      prev.map(item => item.id === updatedItem.id ? updatedItem : item)
-    );
-    setIsModalOpen(false);
-    setSelectedItem(null);
-  };
-
-  const handleAddNew = () => {
-    if (user?.role === 'admin') {
+  const handleConfigSave = async (updatedItem: InventoryItem) => {
+    if (!user) return;
+    try {
+      const response = await fetch(`http://localhost:3001/api/inventory/${updatedItem.InventoryID}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ReorderThreshold: updatedItem.ReorderThreshold,
+          AutoReorder: updatedItem.AutoReorder,
+          UserID: user.id
+        })
+      });
+      if (response.ok) {
+        toast({ title: 'Configuration updated successfully' });
+        fetchInventory(user.id, user.rawRole);
+      } else { throw new Error('Failed to save configuration'); }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Could not save configuration.', variant: 'destructive' });
+    } finally {
+      setIsConfigModalOpen(false);
       setSelectedItem(null);
-      setIsModalOpen(true);
     }
   };
 
   const handleFilter = (filters: any) => {
     let filtered = [...inventoryItems];
-
     if (filters.stockLevel && filters.stockLevel !== 'all') {
-      if (filters.stockLevel === 'low') {
-        filtered = filtered.filter(item => item.stockQuantity < item.reorderThreshold);
-      } else if (filters.stockLevel === 'normal') {
-        filtered = filtered.filter(item => item.stockQuantity >= item.reorderThreshold);
-      }
+      filtered = filtered.filter(item => (filters.stockLevel === 'low' ? item.StockQuantity < item.ReorderThreshold : item.StockQuantity >= item.ReorderThreshold));
     }
-
     if (filters.search) {
-      filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(filters.search.toLowerCase())
-      );
+      filtered = filtered.filter(item => item.Name.toLowerCase().includes(filters.search.toLowerCase()));
     }
-
     setFilteredItems(filtered);
   };
+  
+  const handleReorderSubmit = async (item: InventoryItem, quantity: number) => {
+    if (!user) return;
+    const orderData = {
+      userId: user.id,
+      items: [{ ProductID: item.ProductID, Quantity: quantity, Price: item.Price || 0 }],
+      totalAmount: quantity * (item.Price || 0)
+    };
+    try {
+      const response = await fetch('http://localhost:3001/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      });
+      if (response.ok) {
+        toast({ title: "Reorder Request Submitted" });
+      } else { throw new Error('Failed to create reorder request'); }
+    } catch (error) {
+      toast({ title: "Error", description: "Could not submit reorder request.", variant: "destructive" });
+    } finally {
+      setIsReorderModalOpen(false);
+    }
+  };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
+  if (isLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div></div>;
   }
-
+  
   return (
     <Layout userRole={user.role} userName={user.name}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
-          <div className="flex items-center space-x-3">
-            <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2">
-              <Download className="w-4 h-4" />
-              <span>Export</span>
-            </button>
-            {user?.role === 'admin' && (
-              <button 
-                onClick={handleAddNew}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Item</span>
-              </button>
-            )}
-          </div>
+          <Button onClick={() => toast({ title: 'Exporting...', description: 'Feature coming soon.' })} variant="outline">
+            <Download className="w-4 h-4 mr-2" /> Export
+          </Button>
         </div>
-
         <InventoryFilters onFilter={handleFilter} />
-        
-        <InventoryTable 
+        <InventoryTable
           items={filteredItems}
           userRole={user.role}
-          onEdit={handleEdit}
           onReorder={handleReorder}
+          onConfigure={handleConfigure}
         />
-
-        {isModalOpen && user?.role === 'admin' && (
-          <EditInventoryModal
-            item={selectedItem}
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            onSave={handleSave}
-          />
-        )}
-
         {isReorderModalOpen && (
           <ReorderModal
             item={selectedItem}
             isOpen={isReorderModalOpen}
             onClose={() => setIsReorderModalOpen(false)}
-            userRole={user.role}
+            onReorderSubmit={handleReorderSubmit}
+          />
+        )}
+        {isConfigModalOpen && (
+          <ConfigurationModal
+            item={selectedItem}
+            isOpen={isConfigModalOpen}
+            onClose={() => setIsConfigModalOpen(false)}
+            onSave={handleConfigSave}
           />
         )}
       </div>

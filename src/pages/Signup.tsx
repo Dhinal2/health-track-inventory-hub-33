@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,14 +10,12 @@ import { useToast } from '@/hooks/use-toast';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '', // Combined first and last name
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'staff' as 'admin' | 'staff',
-    hospitalName: '',
-    department: ''
+    role: 'Healthcare Staff' as 'Administrator' | 'Healthcare Staff', // Corrected type
+    contactNumber: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -34,34 +31,54 @@ const Signup = () => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Password Mismatch",
-        description: "Passwords do not match. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Password Mismatch", description: "Passwords do not match.", variant: "destructive" });
       return;
     }
-
     if (formData.password.length < 6) {
-      toast({
-        title: "Weak Password",
-        description: "Password must be at least 6 characters long.",
-        variant: "destructive",
-      });
+      toast({ title: "Weak Password", description: "Password must be at least 6 characters long.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
 
-    // Mock registration - replace with actual backend later
-    setTimeout(() => {
-      toast({
-        title: "Account Created",
-        description: "Your account has been created successfully. Please sign in.",
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          Name: formData.name,
+          Email: formData.email,
+          Password: formData.password,
+          Role: formData.role,
+          ContactNumber: formData.contactNumber,
+        }),
       });
-      navigate('/login');
+
+      if (response.ok) {
+        toast({
+          title: "Account Created",
+          description: "Your account has been created successfully. Please sign in.",
+        });
+        navigate('/login');
+      } else {
+        const errorData = await response.json();
+        toast({
+          title: "Signup Failed",
+          description: errorData.message || "An error occurred during signup.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Network Error",
+        description: "Could not connect to the server. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -80,27 +97,15 @@ const Signup = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  placeholder="John"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  placeholder="Doe"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                placeholder="John Doe"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                required
+              />
             </div>
 
             <div className="space-y-2">
@@ -114,41 +119,29 @@ const Signup = () => {
                 required
               />
             </div>
-
+            
             <div className="space-y-2">
-              <Label htmlFor="hospitalName">Hospital/Organization</Label>
-              <Input
-                id="hospitalName"
-                placeholder="City General Hospital"
-                value={formData.hospitalName}
-                onChange={(e) => handleInputChange('hospitalName', e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
-              <Input
-                id="department"
-                placeholder="Pharmacy, Surgery, etc."
-                value={formData.department}
-                onChange={(e) => handleInputChange('department', e.target.value)}
-                required
-              />
+                <Label htmlFor="contactNumber">Contact Number</Label>
+                <Input
+                id="contactNumber"
+                placeholder="Enter contact number"
+                value={formData.contactNumber}
+                onChange={(e) => handleInputChange('contactNumber', e.target.value)}
+                />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select 
                 value={formData.role} 
-                onValueChange={(value: 'admin' | 'staff') => handleInputChange('role', value)}
+                onValueChange={(value: 'Administrator' | 'Healthcare Staff') => handleInputChange('role', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="staff">Healthcare Staff</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
+                  <SelectItem value="Healthcare Staff">Healthcare Staff</SelectItem>
+                  <SelectItem value="Administrator">Administrator</SelectItem>
                 </SelectContent>
               </Select>
             </div>

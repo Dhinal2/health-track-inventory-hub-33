@@ -9,6 +9,7 @@ import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface User {
+  id: number;
   name: string;
   role: 'admin' | 'staff';
 }
@@ -24,14 +25,17 @@ export const Reports: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate getting user from localStorage or auth context
     const userData = localStorage.getItem('user');
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
-        role: parsedUser.role || 'staff'
-      });
+      const parsedUser = JSON.parse(userData)
+      if (parsedUser.UserID) {
+        const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
+        setUser({
+          id: parsedUser.UserID,
+          name: parsedUser.Name || 'User',
+          role: mappedRole
+        });
+      }
     }
   }, []);
 

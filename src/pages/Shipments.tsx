@@ -1,30 +1,21 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Button } from '@/components/ui/button';
-import { Plus, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { ShipmentFilters } from '@/components/ShipmentFilters';
 import { ShipmentsTable } from '@/components/ShipmentsTable';
-import { CreateShipmentModal } from '@/components/CreateShipmentModal';
-import { EditShipmentModal } from '@/components/EditShipmentModal';
-import { TrackShipmentModal } from '@/components/TrackShipmentModal';
 import { useToast } from '@/hooks/use-toast';
 
-type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
+// New types to match the backend data structure
+type ShipmentStatus = 'Pending' | 'In Transit' | 'Delivered';
 
 interface Shipment {
-  id: string;
-  orderId: string;
-  destination: string;
-  status: ShipmentStatus;
-  estimatedDelivery: string;
-  lastUpdated: string;
-  originCoords: [number, number];
-  currentCoords: [number, number];
-  destinationCoords: [number, number];
-  originAddress: string;
-  currentAddress: string;
-  destinationAddress: string;
+  ShipmentID: number;
+  OrderID: number;
+  DestinationUser: string;
+  Status: ShipmentStatus;
+  Destination: string;
+  EstimatedDelivery: string | null;
 }
 
 type FilterState = {
@@ -35,172 +26,87 @@ type FilterState = {
 };
 
 const Shipments = () => {
-  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+  const { toast } = useToast();
+  const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff'; rawRole: string } | null>(null);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
       const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
-        role: parsedUser.role || 'staff'
-      });
+      if (parsedUser.UserID) {
+        const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
+        const currentUser = {
+          id: parsedUser.UserID,
+          name: parsedUser.Name,
+          role: mappedRole,
+          rawRole: parsedUser.Role
+        };
+        setUser(currentUser);
+        fetchShipments(currentUser.id, currentUser.rawRole);
+      } else {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
     }
   }, []);
 
-  const { toast } = useToast();
-
-  // Mock shipments data
-  const [shipments, setShipments] = useState<Shipment[]>([
-    {
-      id: 'SHP-001',
-      orderId: 'ORD-001',
-      destination: 'City General Hospital',
-      status: 'in-transit' as ShipmentStatus,
-      estimatedDelivery: '2024-01-18',
-      lastUpdated: '2024-01-16T10:30:00Z',
-      originCoords: [40.7128, -74.0060], // New York
-      currentCoords: [39.9526, -75.1652], // Philadelphia
-      destinationCoords: [39.2904, -76.6122], // Baltimore
-      originAddress: 'MedSupply Co., New York, NY',
-      currentAddress: 'Philadelphia Distribution Center',
-      destinationAddress: 'City General Hospital, Baltimore, MD'
-    },
-    {
-      id: 'SHP-002',
-      orderId: 'ORD-002',
-      destination: 'Metro Medical Center',
-      status: 'delivered' as ShipmentStatus,
-      estimatedDelivery: '2024-01-15',
-      lastUpdated: '2024-01-15T14:20:00Z',
-      originCoords: [41.8781, -87.6298], // Chicago
-      currentCoords: [41.8781, -87.6298], // Same as destination when delivered
-      destinationCoords: [41.8781, -87.6298], // Chicago
-      originAddress: 'Healthcare Supplies Ltd., Chicago, IL',
-      currentAddress: 'Metro Medical Center, Chicago, IL',
-      destinationAddress: 'Metro Medical Center, Chicago, IL'
-    },
-    {
-      id: 'SHP-003',
-      orderId: 'ORD-003',
-      destination: 'Regional Health System',
-      status: 'dispatched' as ShipmentStatus,
-      estimatedDelivery: '2024-01-20',
-      lastUpdated: '2024-01-16T08:15:00Z',
-      originCoords: [34.0522, -118.2437], // Los Angeles
-      currentCoords: [34.0522, -118.2437], // Still at origin
-      destinationCoords: [37.7749, -122.4194], // San Francisco
-      originAddress: 'PharmaDirect Warehouse, Los Angeles, CA',
-      currentAddress: 'PharmaDirect Warehouse, Los Angeles, CA',
-      destinationAddress: 'Regional Health System, San Francisco, CA'
+  const fetchShipments = async (userId: number, userRole: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/shipments/user-shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userRole }),
+      });
+      if (response.ok) {
+        setShipments(await response.json());
+      } else {
+        toast({ title: "Info", description: "No shipments found or failed to fetch data." });
+        setShipments([]);
+      }
+    } catch (error) {
+      toast({ title: "Network Error", description: "Could not connect to the server.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-  ]);
-
-  const [filters, setFilters] = useState<FilterState>({
-    search: '',
-    status: 'all',
-    dateFrom: '',
-    dateTo: ''
-  });
-
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
-
-  const handleShipmentCreate = (shipmentData: Omit<Shipment, 'id' | 'lastUpdated'>) => {
-    const newShipment: Shipment = {
-      ...shipmentData,
-      id: `SHP-${(shipments.length + 1).toString().padStart(3, '0')}`,
-      lastUpdated: new Date().toISOString()
-    };
-
-    setShipments(prev => [newShipment, ...prev]);
-    
-    toast({
-      title: "Shipment Created",
-      description: `Shipment ${newShipment.id} has been created successfully.`,
-    });
   };
 
-  const handleShipmentUpdate = (updatedShipment: Shipment) => {
-    setShipments(prev => prev.map(shipment => 
-      shipment.id === updatedShipment.id 
-        ? { ...updatedShipment, lastUpdated: new Date().toISOString() }
-        : shipment
-    ));
+  const [filters, setFilters] = useState<FilterState>({ search: '', status: 'all', dateFrom: '', dateTo: '' });
 
-    toast({
-      title: "Shipment Updated",
-      description: `Shipment ${updatedShipment.id} has been updated successfully.`,
-    });
+  const handleStatusUpdate = async (shipmentId: number, newStatus: ShipmentStatus) => {
+      if (!user) return;
+      try {
+        const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus }),
+        });
+        if (response.ok) {
+            toast({ title: "Shipment Updated", description: `Shipment status is now ${newStatus}.` });
+            fetchShipments(user.id, user.rawRole); // Refresh the list
+        } else {
+            throw new Error('Failed to update shipment');
+        }
+      } catch (error) {
+          toast({ title: "Error", description: "Could not update shipment status.", variant: "destructive"});
+      }
   };
 
   const filteredShipments = useMemo(() => {
-    let filtered = shipments;
-
-    if (filters.search) {
-      filtered = filtered.filter(shipment => 
-        shipment.id.toLowerCase().includes(filters.search.toLowerCase()) ||
-        shipment.orderId.toLowerCase().includes(filters.search.toLowerCase()) ||
-        shipment.destination.toLowerCase().includes(filters.search.toLowerCase())
-      );
-    }
-
-    if (filters.status !== 'all') {
-      filtered = filtered.filter(shipment => shipment.status === filters.status);
-    }
-
-    if (filters.dateFrom) {
-      filtered = filtered.filter(shipment => shipment.estimatedDelivery >= filters.dateFrom);
-    }
-
-    if (filters.dateTo) {
-      filtered = filtered.filter(shipment => shipment.estimatedDelivery <= filters.dateTo);
-    }
-
-    return filtered;
+    return shipments.filter(shipment => {
+        const searchMatch = filters.search
+            ? shipment.ShipmentID.toString().includes(filters.search) || shipment.OrderID.toString().includes(filters.search) || shipment.DestinationUser.toLowerCase().includes(filters.search.toLowerCase())
+            : true;
+        const statusMatch = filters.status !== 'all' ? shipment.Status === filters.status : true;
+        return searchMatch && statusMatch;
+    });
   }, [shipments, filters]);
 
-  const handleExportCSV = () => {
-    const headers = ['Shipment ID', 'Order ID', 'Destination', 'Status', 'Estimated Delivery', 'Last Updated'];
-    const csvData = filteredShipments.map(shipment => [
-      shipment.id,
-      shipment.orderId,
-      shipment.destination,
-      shipment.status,
-      shipment.estimatedDelivery,
-      shipment.lastUpdated
-    ]);
 
-    const csvContent = [headers, ...csvData]
-      .map(row => row.join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'shipments-export.csv';
-    a.click();
-
-    toast({
-      title: "Export Complete",
-      description: "Shipments have been exported to CSV.",
-    });
-  };
-
-  const handleTrackShipment = (shipment: Shipment) => {
-    setSelectedShipment(shipment);
-    setIsTrackModalOpen(true);
-  };
-
-  const handleEditShipment = (shipment: Shipment) => {
-    setSelectedShipment(shipment);
-    setIsEditModalOpen(true);
-  };
-
-  if (!user) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -213,18 +119,6 @@ const Shipments = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Shipments Management</h1>
-          <div className="flex items-center space-x-3">
-            <Button onClick={handleExportCSV} variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
-            {user?.role === 'admin' && (
-              <Button onClick={() => setIsCreateModalOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Shipment
-              </Button>
-            )}
-          </div>
         </div>
 
         <ShipmentFilters
@@ -235,32 +129,10 @@ const Shipments = () => {
         <ShipmentsTable
           shipments={filteredShipments}
           userRole={user.role}
-          onTrackShipment={handleTrackShipment}
-          onEditShipment={handleEditShipment}
+          onStatusUpdate={handleStatusUpdate}
         />
-
-        {user?.role === 'admin' && (
-          <>
-            <CreateShipmentModal
-              isOpen={isCreateModalOpen}
-              onClose={() => setIsCreateModalOpen(false)}
-              onShipmentCreate={handleShipmentCreate}
-            />
-
-            <EditShipmentModal
-              isOpen={isEditModalOpen}
-              onClose={() => setIsEditModalOpen(false)}
-              shipment={selectedShipment}
-              onShipmentUpdate={handleShipmentUpdate}
-            />
-          </>
-        )}
-
-        <TrackShipmentModal
-          isOpen={isTrackModalOpen}
-          onClose={() => setIsTrackModalOpen(false)}
-          shipment={selectedShipment}
-        />
+        
+        {/* Modals for tracking/editing are removed as the primary action is now status updates via the table */}
       </div>
     </Layout>
   );

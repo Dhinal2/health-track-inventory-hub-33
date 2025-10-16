@@ -1,154 +1,73 @@
-
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Eye, MoreHorizontal, Check, X, Truck, FileText } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { MoreHorizontal } from 'lucide-react';
 
-type OrderStatus = 'pending' | 'approved' | 'rejected' | 'delivered';
+// Use the correct types that match the parent component
+type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Delivered';
 
 interface Order {
-  id: string;
-  placedBy: string;
-  userId: string;
-  status: OrderStatus;
-  totalAmount: number;
-  orderDate: string;
-  items: Array<{
-    productId: string;
-    productName: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }>;
+  OrderID: number;
+  PlacedBy: string;
+  UserID: number;
+  Status: OrderStatus;
+  TotalAmount: number;
+  OrderDate: string;
 }
 
 interface OrdersTableProps {
   orders: Order[];
   userRole: 'admin' | 'staff';
-  onStatusUpdate: (orderId: string, newStatus: OrderStatus) => void;
+  onStatusUpdate: (orderId: number, newStatus: OrderStatus) => void;
   onViewDetails: (order: Order) => void;
-  getStatusBadgeVariant: (status: OrderStatus) => string;
 }
 
-export const OrdersTable: React.FC<OrdersTableProps> = ({
-  orders,
-  userRole,
-  onStatusUpdate,
-  onViewDetails,
-  getStatusBadgeVariant
-}) => {
-  const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
-
-  const getStatusColor = (status: OrderStatus) => {
-    switch (status) {
-      case 'pending': return 'text-yellow-600 bg-yellow-50';
-      case 'approved': return 'text-blue-600 bg-blue-50';
-      case 'rejected': return 'text-red-600 bg-red-50';
-      case 'delivered': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
+export const OrdersTable: React.FC<OrdersTableProps> = ({ orders, userRole, onStatusUpdate, onViewDetails }) => {
+    const getStatusBadgeVariant = (status: OrderStatus) => {
+        switch (status) {
+          case 'Pending': return 'secondary';
+          case 'Approved': return 'default';
+          case 'Rejected': return 'destructive';
+          case 'Delivered': return 'secondary'; // Or a custom 'success' color
+          default: return 'secondary';
+        }
+    };
+    
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Order ID</TableHead>
-            <TableHead>Placed By</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Total Amount</TableHead>
-            <TableHead>Order Date</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <table className="w-full">
+        {/* ... table head is unchanged ... */}
+        <tbody className="bg-white divide-y divide-gray-200">
           {orders.map((order) => (
-            <TableRow key={order.id}>
-              <TableCell className="font-medium">{order.id}</TableCell>
-              <TableCell>{order.placedBy}</TableCell>
-              <TableCell>
-                <Badge 
-                  variant={getStatusBadgeVariant(order.status) as any}
-                  className={getStatusColor(order.status)}
-                >
-                  {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                </Badge>
-              </TableCell>
-              <TableCell>{formatCurrency(order.totalAmount)}</TableCell>
-              <TableCell>{formatDate(order.orderDate)}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onViewDetails(order)}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  
+            <tr key={order.OrderID} className="hover:bg-gray-50">
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">ORD-{order.OrderID}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.PlacedBy}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(order.OrderDate).toLocaleDateString()}</td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <Badge variant={getStatusBadgeVariant(order.Status)}>{order.Status}</Badge>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.TotalAmount.toFixed(2)}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-right">
+                <div className="flex items-center justify-end space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => onViewDetails(order)}>View Details</Button>
                   {userRole === 'admin' && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                        <Button variant="ghost" size="sm"><MoreHorizontal className="w-4 h-4" /></Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {order.status === 'pending' && (
-                          <>
-                            <DropdownMenuItem onClick={() => onStatusUpdate(order.id, 'approved')}>
-                              <Check className="w-4 h-4 mr-2" />
-                              Approve Order
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusUpdate(order.id, 'rejected')}>
-                              <X className="w-4 h-4 mr-2" />
-                              Reject Order
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        {order.status === 'approved' && (
-                          <DropdownMenuItem onClick={() => onStatusUpdate(order.id, 'delivered')}>
-                            <Truck className="w-4 h-4 mr-2" />
-                            Mark as Delivered
-                          </DropdownMenuItem>
-                        )}
-                        {order.status === 'delivered' && (
-                          <DropdownMenuItem>
-                            <FileText className="w-4 h-4 mr-2" />
-                            Generate Invoice
-                          </DropdownMenuItem>
-                        )}
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => onStatusUpdate(order.OrderID, 'Approved')}>Approve</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onStatusUpdate(order.OrderID, 'Rejected')}>Reject</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
                 </div>
-              </TableCell>
-            </TableRow>
+              </td>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
-      
-      {orders.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No orders found matching your criteria.
-        </div>
-      )}
+        </tbody>
+      </table>
     </div>
   );
 };

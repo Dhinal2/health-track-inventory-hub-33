@@ -24,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, userRole 
 
   const navigationItems = [
     { name: 'Dashboard', href: '/', icon: Activity, roles: ['admin', 'staff'] },
-    { name: 'Products', href: '/products', icon: Package, roles: ['admin'] },
+    { name: 'Products', href: '/products', icon: Package, roles: ['admin','staff'] },
     { name: 'Inventory', href: '/inventory', icon: Archive, roles: ['admin', 'staff'] },
     { name: 'Orders', href: '/orders', icon: ShoppingCart, roles: ['admin', 'staff'] },
     { name: 'Shipments', href: '/shipments', icon: Truck, roles: ['admin', 'staff'] },

@@ -1,43 +1,67 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatsCard } from './StatsCard';
 import { InventoryChart } from './InventoryChart';
 import { RecentOrders } from './RecentOrders';
 import { LowStockAlerts } from './LowStockAlerts';
-import { Package2, AlertTriangle, ShoppingCart, TrendingUp } from 'lucide-react';
+import { Package2, AlertTriangle, ShoppingCart, DollarSign } from 'lucide-react';
 
 export const Dashboard = () => {
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    lowStockCount: 0,
+    ordersToday: 0,
+    totalRevenue: 0,
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/dashboard/stats');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        } else {
+          console.error('Failed to fetch dashboard stats');
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   const statsData = [
     {
       title: 'Total Products',
-      value: '1,234',
-      change: '+12%',
+      value: stats.totalProducts.toLocaleString(),
+      change: '',
       changeType: 'positive' as const,
       icon: Package2,
       color: 'blue' as const
     },
     {
       title: 'Low Stock Items',
-      value: '23',
-      change: '+5%',
+      value: stats.lowStockCount.toLocaleString(),
+      change: '',
       changeType: 'negative' as const,
       icon: AlertTriangle,
       color: 'red' as const
     },
     {
       title: 'Orders Today',
-      value: '87',
-      change: '+8%',
+      value: stats.ordersToday.toLocaleString(),
+      change: '',
       changeType: 'positive' as const,
       icon: ShoppingCart,
       color: 'green' as const
     },
     {
-      title: 'Savings This Month',
-      value: '$45,678',
-      change: '+15%',
+      title: 'Total Revenue',
+      value: `$${stats.totalRevenue.toLocaleString()}`,
+      change: '',
       changeType: 'positive' as const,
-      icon: TrendingUp,
+      icon: DollarSign,
       color: 'purple' as const
     }
   ];
