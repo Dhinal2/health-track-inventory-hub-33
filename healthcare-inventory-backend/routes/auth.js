@@ -5,7 +5,7 @@ const router = express.Router();
 
 const dbConfig = {
     user: 'healthcare_app_user',
-    password: 'your_new_password',
+    password: 'Pass123!',
     server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
     database: 'HealthCareDB',
     options: {

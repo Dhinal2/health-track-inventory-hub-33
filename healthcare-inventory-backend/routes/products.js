@@ -2,16 +2,14 @@ const express = require('express');
 const sql = require('mssql');
 const router = express.Router();
 
-// This should be your actual dbConfig from server.js
-// For a cleaner setup, you might pass the dbConfig or the pool connection around
-// but for simplicity, we can redefine it here for now.
 const dbConfig = {
+    user: 'healthcare_app_user',
+    password: 'Pass123!', // Make sure to use your actual password
     server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
     database: 'HealthCareDB',
     options: {
         encrypt: false,
-        trustServerCertificate: true,
-        integratedSecurity: true
+        trustServerCertificate: true
     }
 };
 
