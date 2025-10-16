@@ -7,12 +7,25 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { useToast } from '../hooks/use-toast';
 import { CreditCard, ArrowLeft } from 'lucide-react';
+import { Invoice, FrontendPaymentStatus, BackendPaymentStatus } from '@/types'; // Import our types
+
+// Helper function to map backend status to frontend status
+const mapBackendStatus = (status: BackendPaymentStatus): FrontendPaymentStatus => {
+  switch (status) {
+    case 'Paid': return 'paid';
+    case 'Unpaid': return 'unpaid';
+    case 'Partially Paid': return 'partially_paid';
+    default: return 'unpaid';
+  }
+};
 
 const Payment = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { invoice } = location.state || {}; // Safely access invoice from navigation state
+  
+  // The invoice object passed from the Invoices page (already mapped with camelCase properties)
+  const invoice: Invoice | undefined = location.state?.invoice;
 
   const [user, setUser] = useState<{ name: string; role: 'admin' | 'staff' } | null>(null);
   
@@ -20,8 +33,9 @@ const Payment = () => {
     const userData = localStorage.getItem('user');
     if (userData) {
       const parsedUser = JSON.parse(userData);
-      const mappedRole = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
-      setUser({ name: parsedUser.Name, role: mappedRole });
+      // Ensure we use the correct casing from localStorage
+      const mappedRole: 'admin' | 'staff' = (parsedUser.Role === 'Administrator' || parsedUser.role === 'admin') ? 'admin' : 'staff';
+      setUser({ name: parsedUser.Name || parsedUser.name, role: mappedRole });
     }
   }, []);
 
@@ -30,7 +44,8 @@ const Payment = () => {
     cardNumber: '',
     expiryDate: '',
     cvv: '',
-    amount: invoice?.TotalAmount.toFixed(2) || '0.00'
+    // Use grandTotal which includes tax, and is from our mapped Invoice object
+    amount: invoice?.grandTotal.toFixed(2) || '0.00'
   });
 
   const [errors, setErrors] = useState({
@@ -42,7 +57,6 @@ const Payment = () => {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- VALIDATION LOGIC (RESTORED) ---
   const validateExpiryDate = (expiry: string): boolean => {
     const expiryRegex = /^(0[1-9]|1[0-2])\/([0-9]{2})$/;
     if (!expiryRegex.test(expiry)) return false;
@@ -55,13 +69,11 @@ const Payment = () => {
     const expYear = parseInt(year, 10);
     const expMonth = parseInt(month, 10);
 
-    if (expYear < currentYear || (expYear === currentYear && expMonth < currentMonth)) {
-      return false;
-    }
-    return true;
+    return !(expYear < currentYear || (expYear === currentYear && expMonth < currentMonth));
   };
 
   const validateForm = (): boolean => {
+    if (!invoice) return false;
     const newErrors = { cardNumber: '', expiryDate: '', cvv: '', amount: '' };
     const cardNumberClean = paymentData.cardNumber.replace(/\s/g, '');
 
@@ -77,19 +89,16 @@ const Payment = () => {
     const amount = parseFloat(paymentData.amount);
     if (isNaN(amount) || amount <= 0) {
       newErrors.amount = 'Please enter a valid amount.';
-    } else if (amount > invoice.TotalAmount) {
-      newErrors.amount = `Amount cannot exceed the total due of $${invoice.TotalAmount.toFixed(2)}.`;
+    } else if (amount > invoice.grandTotal) {
+      newErrors.amount = `Amount cannot exceed the total due of $${invoice.grandTotal.toFixed(2)}.`;
     }
 
     setErrors(newErrors);
     return !Object.values(newErrors).some(error => error !== '');
   };
 
-  // --- SUBMIT HANDLER WITH VALIDATION ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // First, validate the form
     if (!validateForm()) {
       toast({
         title: "Validation Error",
@@ -103,36 +112,53 @@ const Payment = () => {
     const paymentAmount = parseFloat(paymentData.amount);
 
     try {
-        const response = await fetch(`http://localhost:3001/api/invoices/${invoice.InvoiceID}/pay`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amountPaid: paymentAmount }),
+      // Use camelCase invoiceID from our unified Invoice type
+      const response = await fetch(`http://localhost:3001/api/invoices/${invoice.invoiceID}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountPaid: paymentAmount }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Payment Successful",
+          description: result.message || `Payment of $${paymentAmount.toFixed(2)} processed.`,
         });
-        const result = await response.json();
-        if (response.ok) {
-            toast({
-                title: "Payment Successful",
-                description: `Payment of $${paymentAmount.toFixed(2)} processed. Status is now ${result.newStatus}.`,
-            });
-            setTimeout(() => navigate('/invoices'), 2000);
-        } else {
-            throw new Error(result.message || 'Payment failed');
-        }
+
+        setTimeout(() => {
+          navigate('/invoices', { 
+            state: { 
+              updatedInvoiceId: invoice.id, 
+              newStatus: mapBackendStatus(result.newStatus),
+              paymentAmount: paymentAmount
+            }
+          });
+        }, 1500);
+      } else {
+        throw new Error(result.message || 'Payment processing failed');
+      }
     } catch (error: any) {
-        toast({ title: "Payment Error", description: error.message, variant: "destructive" });
-        setIsLoading(false);
+      toast({
+        title: "Payment Error",
+        description: error.message || "Could not process payment.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   if (!user || !invoice) {
     return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold">Invalid Access</h2>
-                <p>No invoice was selected. Please go back.</p>
-                <Button onClick={() => navigate('/invoices')} className="mt-4">Go to Invoices</Button>
-            </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold">Invalid Access</h2>
+          <p>No invoice was selected. Please go back.</p>
+          <Button onClick={() => navigate('/invoices')} className="mt-4">Go to Invoices</Button>
         </div>
+      </div>
     );
   }
 
@@ -145,14 +171,14 @@ const Payment = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center"><CreditCard className="w-5 h-5 mr-2" /> Payment Details</CardTitle>
-            <CardDescription>Invoice #INV-{invoice.InvoiceID} for {invoice.CustomerName}</CardDescription>
+            <CardDescription>Invoice #{invoice.id} for {invoice.customerName}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="bg-muted p-4 rounded-lg mb-6">
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Total Due Amount:</span>
-                  <span className="text-2xl font-bold text-foreground">${invoice.TotalAmount.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-foreground">${invoice.grandTotal.toFixed(2)}</span>
                 </div>
               </div>
               <div className="space-y-4">
@@ -163,7 +189,7 @@ const Payment = () => {
                 <div>
                   <Label htmlFor="cardNumber">Card Number *</Label>
                   <Input id="cardNumber" value={paymentData.cardNumber} onChange={(e) => setPaymentData({ ...paymentData, cardNumber: e.target.value })} placeholder="1234 5678 9012 3456" required />
-                   {errors.cardNumber && <p className="text-sm text-destructive mt-1">{errors.cardNumber}</p>}
+                  {errors.cardNumber && <p className="text-sm text-destructive mt-1">{errors.cardNumber}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

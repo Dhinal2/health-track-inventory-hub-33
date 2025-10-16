@@ -1,35 +1,80 @@
+// src/pages/Shipments.tsx
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
-import { ShipmentFilters } from '@/components/ShipmentFilters';
 import { ShipmentsTable } from '@/components/ShipmentsTable';
+import { TrackShipmentModal } from '@/components/TrackShipmentModal';
+import { EditShipmentModal } from '@/components/EditShipmentModal';
 import { useToast } from '@/hooks/use-toast';
+import { Shipment, ShipmentStatus, BackendShipmentStatus } from '../types'; // Import new types
 
-// New types to match the backend data structure
-type ShipmentStatus = 'Pending' | 'In Transit' | 'Delivered';
-
-interface Shipment {
+// NOTE: This is the old, backend-specific shipment type. We'll map from this.
+interface BackendShipment {
   ShipmentID: number;
   OrderID: number;
   DestinationUser: string;
-  Status: ShipmentStatus;
+  Status: BackendShipmentStatus;
   Destination: string;
   EstimatedDelivery: string | null;
 }
 
-type FilterState = {
-  search: string;
-  status: ShipmentStatus | 'all';
-  dateFrom: string;
-  dateTo: string;
+// Helper function to map backend status to frontend status
+const mapBackendStatusToFrontend = (status: BackendShipmentStatus): ShipmentStatus => {
+  switch (status) {
+    case 'Pending': return 'dispatched';
+    case 'In Transit': return 'in-transit';
+    case 'Delivered': return 'delivered';
+    default: return 'dispatched';
+  }
 };
+
+// Helper function to map frontend status back to backend status
+const mapFrontendStatusToBackend = (status: ShipmentStatus): BackendShipmentStatus => {
+    switch (status) {
+        case 'dispatched': return 'Pending';
+        case 'in-transit': return 'In Transit';
+        case 'delivered': return 'Delivered';
+        default: return 'Pending';
+    }
+};
+
+// --- MOCK DATA HELPER ---
+// TODO: Replace this with real data from your backend API.
+// Your current API doesn't provide addresses or coordinates.
+// src/pages/Shipments.tsx
+
+const addMockDetailsToShipment = (shipment: BackendShipment): Shipment => ({
+  // Map backend PascalCase to frontend camelCase
+  shipmentID: shipment.ShipmentID,
+  orderID: shipment.OrderID,
+  destinationUser: shipment.DestinationUser,
+  destination: shipment.Destination,
+  estimatedDelivery: shipment.EstimatedDelivery || new Date().toISOString(),
+
+  // Keep the rest of the fields
+  id: shipment.ShipmentID.toString(),
+  orderId: shipment.OrderID.toString(),
+  status: mapBackendStatusToFrontend(shipment.Status),
+  lastUpdated: new Date().toISOString(),
+  originAddress: 'Warehouse A, Philadelphia, PA',
+  currentAddress: shipment.Status === 'Pending' ? 'Warehouse A, Philadelphia, PA' : 'On Route 66, TX',
+  destinationAddress: shipment.Destination,
+  originCoords: [39.9526, -75.1652],
+  currentCoords: [34.0522, -118.2437],
+  destinationCoords: [39.2904, -76.6122],
+});
+
 
 const Shipments = () => {
   const { toast } = useToast();
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff'; rawRole: string } | null>(null);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // State for modals
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [isEditModalOpen, setEditModalOpen] = useState(false);
+  const [isTrackModalOpen, setTrackModalOpen] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -45,8 +90,6 @@ const Shipments = () => {
         };
         setUser(currentUser);
         fetchShipments(currentUser.id, currentUser.rawRole);
-      } else {
-        setIsLoading(false);
       }
     } else {
       setIsLoading(false);
@@ -62,9 +105,10 @@ const Shipments = () => {
         body: JSON.stringify({ userId, userRole }),
       });
       if (response.ok) {
-        setShipments(await response.json());
+        const data: BackendShipment[] = await response.json();
+        // Map backend data to the detailed frontend type
+        setShipments(data.map(addMockDetailsToShipment));
       } else {
-        toast({ title: "Info", description: "No shipments found or failed to fetch data." });
         setShipments([]);
       }
     } catch (error) {
@@ -74,65 +118,90 @@ const Shipments = () => {
     }
   };
 
-  const [filters, setFilters] = useState<FilterState>({ search: '', status: 'all', dateFrom: '', dateTo: '' });
-
-  const handleStatusUpdate = async (shipmentId: number, newStatus: ShipmentStatus) => {
-      if (!user) return;
-      try {
-        const response = await fetch(`http://localhost:3001/api/shipments/${shipmentId}/status`, {
+  // Handler to update a shipment
+  const handleShipmentUpdate = async (updatedShipment: Shipment) => {
+    if (!user) return;
+    
+    // TODO: You'll need a new, more comprehensive backend endpoint to update all details.
+    // For now, we only update the status to preserve your inventory logic.
+    try {
+        const backendStatus = mapFrontendStatusToBackend(updatedShipment.status);
+        const response = await fetch(`http://localhost:3001/api/shipments/${updatedShipment.shipmentID}/status`, { // Use shipmentID
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus }),
+            body: JSON.stringify({ status: backendStatus }),
         });
+
         if (response.ok) {
-            toast({ title: "Shipment Updated", description: `Shipment status is now ${newStatus}.` });
-            fetchShipments(user.id, user.rawRole); // Refresh the list
+            toast({ title: "Shipment Updated", description: `Shipment ${updatedShipment.id} has been updated.` });
+            fetchShipments(user.id, user.rawRole); // Refresh list
         } else {
-            throw new Error('Failed to update shipment');
+            throw new Error('Failed to update shipment status');
         }
-      } catch (error) {
-          toast({ title: "Error", description: "Could not update shipment status.", variant: "destructive"});
-      }
+    } catch (error) {
+        toast({ title: "Error", description: "Could not update shipment.", variant: "destructive"});
+    }
   };
 
+  // Modal handlers
+  const handleOpenTrackModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setTrackModalOpen(true);
+  };
+
+  const handleOpenEditModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setEditModalOpen(true);
+  };
+
+  const handleCloseModals = () => {
+    setTrackModalOpen(false);
+    setEditModalOpen(false);
+    setSelectedShipment(null);
+  };
+  
+  // NOTE: Filtering logic remains the same, but now operates on the mapped `Shipment` objects.
+  const [filters, setFilters] = useState({ search: '', status: 'all' });
   const filteredShipments = useMemo(() => {
     return shipments.filter(shipment => {
         const searchMatch = filters.search
-            ? shipment.ShipmentID.toString().includes(filters.search) || shipment.OrderID.toString().includes(filters.search) || shipment.DestinationUser.toLowerCase().includes(filters.search.toLowerCase())
+            ? shipment.id.includes(filters.search) || shipment.orderId.includes(filters.search) || shipment.destination.toLowerCase().includes(filters.search.toLowerCase())
             : true;
-        const statusMatch = filters.status !== 'all' ? shipment.Status === filters.status : true;
+        const statusMatch = filters.status !== 'all' ? shipment.status === filters.status : true;
         return searchMatch && statusMatch;
     });
   }, [shipments, filters]);
 
-
   if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">...Loading</div>;
   }
 
   return (
     <Layout userRole={user.role} userName={user.name}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Shipments Management</h1>
-        </div>
-
-        <ShipmentFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
+        <h1 className="text-2xl font-bold">Shipments Management</h1>
+        
+        {/* You can add your ShipmentFilters component back here if needed */}
 
         <ShipmentsTable
           shipments={filteredShipments}
           userRole={user.role}
-          onStatusUpdate={handleStatusUpdate}
+          onTrackShipment={handleOpenTrackModal}
+          onEditShipment={handleOpenEditModal}
         />
         
-        {/* Modals for tracking/editing are removed as the primary action is now status updates via the table */}
+        <TrackShipmentModal 
+            isOpen={isTrackModalOpen}
+            onClose={handleCloseModals}
+            shipment={selectedShipment}
+        />
+
+        <EditShipmentModal
+            isOpen={isEditModalOpen}
+            onClose={handleCloseModals}
+            shipment={selectedShipment}
+            onShipmentUpdate={handleShipmentUpdate}
+        />
       </div>
     </Layout>
   );

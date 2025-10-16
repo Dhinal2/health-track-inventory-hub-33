@@ -1,13 +1,16 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { FrontendPaymentStatus } from '@/types';
+import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
 
 // Use the correct, capitalized status from the parent
 type PaymentStatus = 'Paid' | 'Unpaid' | 'Partially Paid';
 
 type FilterState = {
   search: string;
-  paymentStatus: PaymentStatus | 'all';
+  paymentStatus: FrontendPaymentStatus | 'all';
   dateFrom: string;
   dateTo: string;
 };

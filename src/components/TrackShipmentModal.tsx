@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Dialog,
@@ -8,24 +7,9 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ShipmentMap } from './ShipmentMap';
+import { Shipment, ShipmentStatus } from '@/types'; // <-- This is the only place the types should come from
 
-type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
-
-interface Shipment {
-  id: string;
-  orderId: string;
-  destination: string;
-  status: ShipmentStatus;
-  estimatedDelivery: string;
-  lastUpdated: string;
-  originCoords: [number, number];
-  currentCoords: [number, number];
-  destinationCoords: [number, number];
-  originAddress: string;
-  currentAddress: string;
-  destinationAddress: string;
-}
-
+// This interface defines the props for our component. It was likely deleted.
 interface TrackShipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -56,14 +40,15 @@ export const TrackShipmentModal: React.FC<TrackShipmentModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
+          {/* Use the correct camelCase property 'id' */}
           <DialogTitle>Track Shipment - {shipment.id}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Shipment Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
               <p className="text-sm text-gray-600">Order ID</p>
+              {/* Use the correct camelCase property 'orderId' */}
               <p className="font-medium">{shipment.orderId}</p>
             </div>
             <div>
@@ -74,24 +59,25 @@ export const TrackShipmentModal: React.FC<TrackShipmentModalProps> = ({
             </div>
             <div>
               <p className="text-sm text-gray-600">Destination</p>
+              {/* Use the correct camelCase property 'destination' */}
               <p className="font-medium">{shipment.destination}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Estimated Delivery</p>
+              {/* Use the correct camelCase property 'estimatedDelivery' */}
               <p className="font-medium">{new Date(shipment.estimatedDelivery).toLocaleDateString()}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Last Updated</p>
+              {/* Use the correct camelCase property 'lastUpdated' */}
               <p className="font-medium">{formatTimestamp(shipment.lastUpdated)}</p>
             </div>
           </div>
 
-          {/* Map */}
           <div className="h-96 w-full border rounded-lg overflow-hidden">
             <ShipmentMap shipment={shipment} />
           </div>
 
-          {/* Location Details */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 border rounded-lg">
               <h4 className="font-medium text-green-600 mb-2">Origin</h4>
