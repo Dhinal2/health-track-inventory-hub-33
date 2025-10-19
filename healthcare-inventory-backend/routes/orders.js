@@ -92,38 +92,23 @@ router.put('/:id/status', async (req, res) => {
         await transaction.begin();
         let newStatus = status;
 
-        // The only status changes allowed here are pre-shipment
         if (status === 'Approved') {
             newStatus = 'Awaiting Payment';
         } else if (status === 'Received') {
-            // Inventory logic for received orders still lives here
-            const orderResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT * FROM Orders WHERE OrderID = @OrderID');
-            const order = orderResult.recordset[0];
+            // When an order is received, check its payment status to decide the next step.
             const invoiceResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT PaymentStatus FROM Invoices WHERE OrderID = @OrderID');
             const invoice = invoiceResult.recordset[0];
 
             if (invoice.PaymentStatus === 'Paid') {
-                // Logic to add items to inventory
-                const orderItemsResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT * FROM OrderItems WHERE OrderID = @OrderID');
-                for (const item of orderItemsResult.recordset) {
-                    const inventoryCheck = await new sql.Request(transaction).input('UserID', sql.Int, order.UserID).input('ProductID', sql.Int, item.ProductID).query('SELECT * FROM Inventory WHERE UserID = @UserID AND ProductID = @ProductID');
-                    if (inventoryCheck.recordset.length > 0) {
-                        await new sql.Request(transaction).input('UserID', sql.Int, order.UserID).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).query('UPDATE Inventory SET StockQuantity = StockQuantity + @Quantity WHERE UserID = @UserID AND ProductID = @ProductID');
-                    } else {
-                        await new sql.Request(transaction).input('UserID', sql.Int, order.UserID).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).query('INSERT INTO Inventory (UserID, ProductID, StockQuantity, ReorderThreshold, AutoReorder) VALUES (@UserID, @ProductID, @Quantity, 50, 0)');
-                    }
-                }
+                // This case should be rare, but if paid in full before delivery, just complete it.
                 newStatus = 'Completed';
             } else if (invoice.PaymentStatus === 'Partially Paid') {
+                // If partially paid, set status to require final payment.
                 newStatus = 'Pending Final Payment';
             }
         }
         
-        // Update the order status
-        await new sql.Request(transaction)
-            .input('OrderID', sql.Int, id)
-            .input('Status', sql.NVarChar, newStatus)
-            .query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
+        await new sql.Request(transaction).input('OrderID', sql.Int, id).input('Status', sql.NVarChar, newStatus).query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
 
         await transaction.commit();
         res.status(200).send({ message: `Order status updated to ${newStatus}` });

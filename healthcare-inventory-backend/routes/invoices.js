@@ -61,22 +61,13 @@ router.post('/user-invoices', async (req, res) => {
 router.post('/:id/pay', async (req, res) => {
     const { id } = req.params;
     const { amountPaid } = req.body;
-
     const pool = await sql.connect(dbConfig);
     const transaction = new sql.Transaction(pool);
 
     try {
         await transaction.begin();
 
-        const invoiceDetails = await new sql.Request(transaction)
-            .input('InvoiceID', sql.Int, id)
-            .query(`
-                SELECT 
-                    i.TotalAmount, i.OrderID,
-                    ISNULL((SELECT SUM(Amount) FROM Payments WHERE InvoiceID = @InvoiceID), 0) as TotalPaid 
-                FROM Invoices i WHERE i.InvoiceID = @InvoiceID
-            `);
-
+        const invoiceDetails = await new sql.Request(transaction).input('InvoiceID', sql.Int, id).query(`SELECT i.TotalAmount, i.OrderID, ISNULL((SELECT SUM(Amount) FROM Payments WHERE InvoiceID = @InvoiceID), 0) as TotalPaid FROM Invoices i WHERE i.InvoiceID = @InvoiceID`);
         if (invoiceDetails.recordset.length === 0) {
             await transaction.rollback();
             return res.status(404).send({ message: 'Invoice not found.' });
@@ -87,73 +78,65 @@ router.post('/:id/pay', async (req, res) => {
 
         if (parseFloat(amountPaid) < TotalAmount && TotalPaid == 0 && parseFloat(amountPaid) < halfAmount) {
             await transaction.rollback();
-            return res.status(400).send({ 
-                message: `Partial payments must be at least 50% of the total amount. Minimum payment: $${halfAmount.toFixed(2)}` 
-            });
+            return res.status(400).send({ message: `The first partial payment must be at least 50% of the total. Minimum payment: $${halfAmount.toFixed(2)}` });
         }
 
-        await new sql.Request(transaction)
-            .input('InvoiceID', sql.Int, id)
-            .input('Amount', sql.Decimal(10, 2), amountPaid)
-            .input('PaymentMethod', sql.NVarChar, 'Credit Card')
-            .query('INSERT INTO Payments (InvoiceID, Amount, PaymentMethod) VALUES (@InvoiceID, @Amount, @PaymentMethod)');
-
+        await new sql.Request(transaction).input('InvoiceID', sql.Int, id).input('Amount', sql.Decimal(10, 2), amountPaid).input('PaymentMethod', sql.NVarChar, 'Credit Card').query('INSERT INTO Payments (InvoiceID, Amount, PaymentMethod) VALUES (@InvoiceID, @Amount, @PaymentMethod)');
         const newTotalPaid = TotalPaid + parseFloat(amountPaid);
         const newPaymentStatus = newTotalPaid >= TotalAmount ? 'Paid' : 'Partially Paid';
         
-        await new sql.Request(transaction)
-            .input('InvoiceID', sql.Int, id)
-            .input('PaymentStatus', sql.NVarChar, newPaymentStatus)
-            .query('UPDATE Invoices SET PaymentStatus = @PaymentStatus WHERE InvoiceID = @InvoiceID');
+        await new sql.Request(transaction).input('InvoiceID', sql.Int, id).input('PaymentStatus', sql.NVarChar, newPaymentStatus).query('UPDATE Invoices SET PaymentStatus = @PaymentStatus WHERE InvoiceID = @InvoiceID');
         
-        const orderResult = await new sql.Request(transaction)
-            .input('OrderID', sql.Int, OrderID)
-            .query('SELECT Status, UserID FROM Orders WHERE OrderID = @OrderID');
+        const orderResult = await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query('SELECT Status, UserID FROM Orders WHERE OrderID = @OrderID');
         const { Status: currentOrderStatus, UserID } = orderResult.recordset[0];
 
         if (currentOrderStatus === 'Awaiting Payment') {
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("INSERT INTO Shipments (OrderID, Status, Destination) VALUES (@OrderID, 'Pending', 'User Department')");
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Dispatched' WHERE OrderID = @OrderID");
+        
+        // --- LOGIC FIX: Handle final payment on a received order ---
         } else if (currentOrderStatus === 'Pending Final Payment' && newPaymentStatus === 'Paid') {
-            // ... (inventory logic remains the same)
+            // The final payment has been made, so we can now complete the order and add items to inventory.
+            const orderItemsResult = await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query('SELECT * FROM OrderItems WHERE OrderID = @OrderID');
+            for (const item of orderItemsResult.recordset) {
+                const inventoryCheck = await new sql.Request(transaction).input('UserID', sql.Int, UserID).input('ProductID', sql.Int, item.ProductID).query('SELECT * FROM Inventory WHERE UserID = @UserID AND ProductID = @ProductID');
+                if (inventoryCheck.recordset.length > 0) {
+                    await new sql.Request(transaction).input('UserID', sql.Int, UserID).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).query('UPDATE Inventory SET StockQuantity = StockQuantity + @Quantity WHERE UserID = @UserID AND ProductID = @ProductID');
+                } else {
+                    await new sql.Request(transaction).input('UserID', sql.Int, UserID).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).query('INSERT INTO Inventory (UserID, ProductID, StockQuantity, ReorderThreshold, AutoReorder) VALUES (@UserID, @ProductID, @Quantity, 50, 0)');
+                }
+            }
+            // Finally, update the order status to 'Completed'
+            await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Completed' WHERE OrderID = @OrderID");
         }
 
         await transaction.commit();
         res.status(200).send({ message: 'Payment successful', newStatus: newPaymentStatus });
-    
-    } catch (error) {
-        // --- THIS IS THE UPDATED PART ---
-        await transaction.rollback();
-        // Log the full error to the server's console for debugging
-        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.error("!!!     CRITICAL ERROR During Payment    !!!");
-        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        console.error("Timestamp:", new Date().toISOString());
-        console.error("Route: POST /api/invoices/:id/pay");
-        console.error("Full Error Object:", JSON.stringify(error, null, 2)); // This will give us the exact details
 
-        // Send a more specific error message back to the frontend
-        let errorMessage = 'Payment processing failed due to a critical server error.';
+    } catch (error) {
+        await transaction.rollback();
+        console.error('CRITICAL ERROR processing payment:', error);
+        let errorMessage = 'Payment processing failed due to a server error.';
         if (error.originalError && error.originalError.info) {
             errorMessage = `Database Error: ${error.originalError.info.message}`;
         }
-        
         res.status(500).send({ message: errorMessage });
     }
 });
 
-// GET /api/invoices/by-order - Fetch an invoice by its OrderID
 router.post('/by-order', async (req, res) => {
-    console.log("  -> 🎯 [POST /api/invoices/by-order] Route hit!"); // Diagnostic log
+    console.log("  -> 🎯 [POST /api/invoices/by-order] Route hit!");
     const { orderId } = req.body;
 
     if (!orderId) {
-        console.log("  -> ❗ Error: OrderID missing from request.");
         return res.status(400).send({ message: 'OrderID is required.' });
     }
 
     try {
+        console.log("  -> Connecting to database...");
         const pool = await sql.connect(dbConfig);
+        console.log("  -> Database connection successful.");
+
         const result = await pool.request()
             .input('OrderID', sql.Int, orderId)
             .query(`
@@ -173,11 +156,19 @@ router.post('/by-order', async (req, res) => {
         res.json(result.recordset[0]);
 
     } catch (error) {
-        console.error('  -> ❌ Error fetching invoice by order:', error);
-        res.status(500).send({ message: 'Server error' });
+        // --- FIX: This will now catch connection timeout errors ---
+        console.error("  -> ❌ CRITICAL ERROR in /by-order route:", JSON.stringify(error, null, 2));
+        
+        let errorMessage = 'Server error while fetching invoice.';
+        if (error.code === 'ETIMEOUT') {
+            errorMessage = 'Database connection timed out. Please check the database server and credentials.';
+        } else if (error.originalError && error.originalError.info) {
+            errorMessage = `Database Error: ${error.originalError.info.message}`;
+        }
+        
+        res.status(500).send({ message: errorMessage });
     }
 });
-
 
 module.exports = router;
 console.log("  -> ✅ invoices.js routes loaded."); // Diagnostic log
