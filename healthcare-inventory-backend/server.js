@@ -1,17 +1,27 @@
 const express = require('express');
-const sql = require('mssql');
 const cors = require('cors');
+const sql = require('mssql');
+
+// Import all application routes
+const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
+const orderRoutes = require('./routes/orders');
+const shipmentRoutes = require('./routes/shipments');
+const inventoryRoutes = require('./routes/inventory');
+const dashboardRoutes = require('./routes/dashboard');
+const invoiceRoutes = require('./routes/invoices');
 
 const app = express();
-const port = 3001;
+const PORT = process.env.PORT || 3001;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Database configuration
+// Database Configuration
 const dbConfig = {
-    user: 'healthcare_app_user',         
-    password: 'Pass123!',      
+    user: 'healthcare_app_user',
+    password: 'Pass123!',
     server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
     database: 'HealthCareDB',
     options: {
@@ -20,37 +30,27 @@ const dbConfig = {
     }
 };
 
-// Test database connection
+// Test DB Connection on startup
 sql.connect(dbConfig).then(pool => {
-    console.log('Connected to SQL Server');
-    // You can now use the 'pool' object to execute queries
+    console.log('✅ [DB] Connected to SQL Server');
 }).catch(err => {
-    console.error('Database connection failed:', err);
+    console.error('❌ [DB] Database connection failed:', err);
 });
 
-// Basic route
-app.get('/', (req, res) => {
-    res.send('Healthcare Inventory Backend is running!');
+// Register API routes
+console.log("🔵 [API] Registering routes...");
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/shipments', shipmentRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/invoices', invoiceRoutes);
+console.log("  -> ✨ Registered /api/invoices"); // <-- ADDED LOG
+
+console.log("✅ [API] All routes registered.");
+
+// Start Server
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
-
-// Start the server
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
-
-//Login Routes
-const authRouter = require('./routes/auth'); 
-const dashboardRouter = require('./routes/dashboard');
-const productsRouter = require('./routes/products');
-const inventoryRouter = require('./routes/inventory');
-const ordersRouter = require('./routes/orders');
-const shipmentsRouter = require('./routes/shipments');
-const invoicesRouter = require('./routes/invoices');
-
-app.use('/api/auth', authRouter); 
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/products', productsRouter);
-app.use('/api/inventory', inventoryRouter);
-app.use('/api/orders', ordersRouter);
-app.use('/api/shipments', shipmentsRouter);
-app.use('/api/invoices', invoicesRouter);
