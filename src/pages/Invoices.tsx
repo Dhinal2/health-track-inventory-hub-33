@@ -8,9 +8,8 @@ import { InvoiceDetailsModal } from '@/components/InvoiceDetailsModal';
 import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Invoice, FrontendPaymentStatus, BackendPaymentStatus } from '@/types'; // Import from central types
+import { Invoice, Order, FrontendPaymentStatus, BackendPaymentStatus } from '@/types';
 
-// The shape of data coming from your backend
 interface BackendInvoice {
   InvoiceID: number;
   OrderID: number;
@@ -28,9 +27,6 @@ type FilterState = {
   dateTo: string;
 };
 
-// --- MAPPING HELPERS ---
-
-// Maps backend status strings to our frontend-friendly types
 const mapBackendStatus = (status: BackendPaymentStatus): FrontendPaymentStatus => {
     switch (status) {
         case 'Paid': return 'paid';
@@ -40,8 +36,7 @@ const mapBackendStatus = (status: BackendPaymentStatus): FrontendPaymentStatus =
     }
 };
 
-// This function adds the detailed mock data needed by the UI components
-// TODO: Replace this with real data from a more detailed API endpoint
+// --- Find and replace this function in src/pages/Invoices.tsx ---
 const addMockDetailsToInvoice = (invoice: BackendInvoice): Invoice => ({
   invoiceID: invoice.InvoiceID,
   orderID: invoice.OrderID,
@@ -51,22 +46,22 @@ const addMockDetailsToInvoice = (invoice: BackendInvoice): Invoice => ({
   issueDate: invoice.IssueDate,
   dueDate: invoice.DueDate || new Date().toISOString(),
 
-  // --- Mocked Details ---
+  // --- Mocked Details (Corrected) ---
   id: `INV-${invoice.InvoiceID.toString().padStart(3, '0')}`,
   orderId: `ORD-${invoice.OrderID.toString().padStart(3, '0')}`,
   facilityName: 'Emergency Department',
   items: [{ productId: 'P001', productName: 'Surgical Masks', quantity: 100, unitPrice: 2.25, subtotal: 225.00 }],
-  tax: invoice.TotalAmount * 0.1,
-  grandTotal: invoice.TotalAmount * 1.1,
-  amountPaid: invoice.PaymentStatus === 'Paid' ? invoice.TotalAmount * 1.1 : (invoice.PaymentStatus === 'Partially Paid' ? invoice.TotalAmount / 2 : 0),
-  outstandingBalance: invoice.PaymentStatus === 'Paid' ? 0 : (invoice.PaymentStatus === 'Partially Paid' ? (invoice.TotalAmount * 1.1) / 2 : invoice.TotalAmount * 1.1),
+  tax: 0, // Tax is now zero
+  grandTotal: invoice.TotalAmount, // Grand total is now the same as total amount
+  amountPaid: invoice.PaymentStatus === 'Paid' ? invoice.TotalAmount : (invoice.PaymentStatus === 'Partially Paid' ? invoice.TotalAmount / 2 : 0),
+  outstandingBalance: invoice.PaymentStatus === 'Paid' ? 0 : (invoice.PaymentStatus === 'Partially Paid' ? invoice.TotalAmount / 2 : invoice.TotalAmount),
   customerDetails: {
     name: invoice.CustomerName,
     address: '123 Medical Center Dr, Health City, HC 12345',
     contact: '+1 (555) 123-4567',
     email: 'billing@citygeneral.com',
   },
-  paymentHistory: invoice.PaymentStatus === 'Paid' ? [{ date: '2024-01-20', amount: invoice.TotalAmount * 1.1, method: 'Bank Transfer' }] : [],
+  paymentHistory: invoice.PaymentStatus === 'Paid' ? [{ date: '2024-01-20', amount: invoice.TotalAmount, method: 'Bank Transfer' }] : [],
 });
 
 const Invoices = () => {
@@ -77,20 +72,15 @@ const Invoices = () => {
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff'; rawRole: string } | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modal states
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  
-  // Filters state
   const [filters, setFilters] = useState<FilterState>({ 
     search: '', 
     paymentStatus: 'all', 
     dateFrom: '', 
     dateTo: '' 
   });
-
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -113,14 +103,11 @@ const Invoices = () => {
     }
   }, []);
 
-  // Effect to handle updates after returning from the payment page
   useEffect(() => {
     const state = location.state as { updatedInvoiceId?: string; newStatus?: FrontendPaymentStatus; paymentAmount?: number } | undefined;
     if (state?.updatedInvoiceId && state?.newStatus) {
-        // Update local invoice state
-        setInvoices(prev => prev.map(inv => inv.id === state.updatedInvoiceId ? {...inv, paymentStatus: state.newStatus!} : inv));
-        // Clear navigation state
-        navigate(location.pathname, { replace: true, state: {} });
+      setInvoices(prev => prev.map(inv => inv.id === state.updatedInvoiceId ? {...inv, paymentStatus: state.newStatus!} : inv));
+      navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location, navigate]);
 
@@ -134,7 +121,6 @@ const Invoices = () => {
       });
       if (response.ok) {
         const data: BackendInvoice[] = await response.json();
-        // Map backend data to our detailed frontend invoice type
         setInvoices(data.map(addMockDetailsToInvoice));
       } else {
         setInvoices([]);
@@ -146,7 +132,6 @@ const Invoices = () => {
     }
   };
   
-  // TODO: Implement the backend logic for this.
   const handlePaymentStatusUpdate = (invoiceId: string, newStatus: FrontendPaymentStatus) => {
     setInvoices(prev => prev.map(invoice => 
       invoice.id === invoiceId 
@@ -156,7 +141,6 @@ const Invoices = () => {
     toast({ title: "Status Updated", description: `Invoice ${invoiceId} marked as ${newStatus}.` });
   };
   
-  // TODO: Implement the backend logic for this.
   const handleInvoiceGenerate = (invoiceData: any) => {
     const newInvoice: Invoice = {
       ...addMockDetailsToInvoice({
@@ -168,7 +152,6 @@ const Invoices = () => {
         IssueDate: new Date().toISOString(),
         DueDate: invoiceData.dueDate,
       }),
-      // Add more specific details from the generation modal
       ...invoiceData,
     };
     setInvoices(prev => [newInvoice, ...prev]);
@@ -176,7 +159,6 @@ const Invoices = () => {
   };
 
   const filteredInvoices = useMemo(() => {
-    // Note: This logic now works on the mapped `Invoice` objects.
     return invoices.filter(invoice => {
       const searchMatch = filters.search
         ? invoice.id.toLowerCase().includes(filters.search.toLowerCase()) || 
@@ -187,18 +169,42 @@ const Invoices = () => {
     });
   }, [invoices, filters]);
 
-  // Modal Handlers
   const handleViewDetails = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setIsDetailsModalOpen(true);
   };
   
-  const handlePayNow = (invoice: Invoice) => {
-    // The Invoice object is now much richer and can be passed to the payment page
-    navigate('/payment', { state: { invoice } });
+  // --- CORRECTED NAVIGATION LOGIC ---
+  const handlePayNow = async (invoice: Invoice) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/orders/user-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user!.id, userRole: user!.rawRole }),
+      });
+      if (!response.ok) throw new Error("Failed to fetch orders to find match.");
+      
+      const orders: Order[] = await response.json();
+      const fullOrder = orders.find(o => o.OrderID === invoice.orderID);
+
+      if (fullOrder) {
+          // The payment page expects a full Order object in the state
+          navigate('/payment', { state: { order: fullOrder } });
+      } else {
+          throw new Error("Could not find the original order for this invoice.");
+      }
+    } catch (error: any) {
+        toast({
+            title: "Navigation Error",
+            description: error.message || "Could not proceed to the payment page.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsLoading(false);
+    }
   };
   
-  // Other handlers remain the same as your provided logic...
   const handleDownloadPDF = (invoice: Invoice) => {
     toast({ title: "PDF Downloaded", description: `Invoice ${invoice.id}.pdf has been saved.` });
   };

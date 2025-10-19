@@ -1,11 +1,16 @@
-// src/components/ShipmentsTable.tsx
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MapPin, Edit, AlertTriangle } from 'lucide-react';
-import { Shipment, ShipmentStatus } from '@/types'; // Import types
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Truck, Pencil } from 'lucide-react';
+import { Shipment, ShipmentStatus } from '../types';
 
 interface ShipmentsTableProps {
   shipments: Shipment[];
@@ -18,59 +23,58 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
   shipments,
   userRole,
   onTrackShipment,
-  onEditShipment
+  onEditShipment,
 }) => {
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+  // Correct formatting logic for Order ID
+  const formatOrderId = (orderId: number) => {
+    return `ORD-${String(orderId).padStart(4, '0')}`;
+  };
+
   const getStatusColor = (status: ShipmentStatus) => {
     switch (status) {
-      case 'dispatched': return 'text-blue-600 bg-blue-50';
-      case 'in-transit': return 'text-yellow-600 bg-yellow-50';
-      case 'delivered': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'dispatched': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'in-transit': return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'delivered': return 'bg-green-100 text-green-800 border-green-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
-  const isOverdue = (estimatedDelivery: string, status: ShipmentStatus) => {
-    if (status === 'delivered') return false;
-    return new Date() > new Date(estimatedDelivery);
-  };
-
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
-
   return (
-    <div className="border rounded-lg">
+    <div className="rounded-md border bg-white shadow-sm">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead>Shipment ID</TableHead>
-            <TableHead>Order ID</TableHead>
-            <TableHead>Destination</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Est. Delivery</TableHead>
-            <TableHead>Actions</TableHead>
+          <TableRow className="bg-gray-50">
+            <TableHead className="font-semibold">Shipment ID</TableHead>
+            <TableHead className="font-semibold">Order ID</TableHead>
+            <TableHead className="font-semibold">Destination</TableHead>
+            <TableHead className="font-semibold">Status</TableHead>
+            <TableHead className="font-semibold">Est. Delivery</TableHead>
+            <TableHead className="font-semibold text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {shipments.map((shipment) => (
-            <TableRow key={shipment.id} className={isOverdue(shipment.estimatedDelivery, shipment.status) ? 'bg-red-50' : ''}>
-              <TableCell className="font-medium">{shipment.id}</TableCell>
-              <TableCell>{shipment.orderId}</TableCell>
-              <TableCell>{shipment.destination}</TableCell>
+            <TableRow key={shipment.id} className="hover:bg-gray-50">
+              <TableCell className="font-medium">SHP-{shipment.shipmentID.toString().padStart(4, '0')}</TableCell>
+              {/* The fix is here: we now call formatOrderId with the numeric shipment.orderID */}
+              <TableCell className="font-medium">{formatOrderId(shipment.orderID)}</TableCell>
+              <TableCell>{shipment.destinationAddress}</TableCell>
               <TableCell>
-                <Badge className={getStatusColor(shipment.status)}>
-                  {shipment.status.charAt(0).toUpperCase() + shipment.status.slice(1).replace('-', ' ')}
+                <Badge variant="outline" className={`border ${getStatusColor(shipment.status)}`}>
+                  {shipment.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </Badge>
               </TableCell>
-              <TableCell className={isOverdue(shipment.estimatedDelivery, shipment.status) ? 'text-red-600' : ''}>
-              {formatDate(shipment.estimatedDelivery)}
-</TableCell>
+              <TableCell>{formatDate(shipment.estimatedDelivery)}</TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => onTrackShipment(shipment)}>
-                    <MapPin className="w-4 h-4 mr-1" /> Track
+                <div className="flex items-center justify-center gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => onTrackShipment(shipment)}>
+                    <Truck className="w-4 h-4" />
                   </Button>
                   {userRole === 'admin' && (
-                    <Button variant="outline" size="sm" onClick={() => onEditShipment(shipment)}>
-                      <Edit className="w-4 h-4 mr-1" /> Edit
+                    <Button variant="ghost" size="icon" onClick={() => onEditShipment(shipment)}>
+                      <Pencil className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
@@ -79,6 +83,11 @@ export const ShipmentsTable: React.FC<ShipmentsTableProps> = ({
           ))}
         </TableBody>
       </Table>
+       {shipments.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-lg">No shipments found.</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -7,102 +9,102 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Eye, CreditCard, Download, MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Eye, Download, MoreHorizontal, CheckCircle, Clock, AlertCircle, CreditCard } from 'lucide-react';
-import { format } from 'date-fns';
-import { Invoice, FrontendPaymentStatus } from '@/types'; // Import the unified types
+import { Invoice, FrontendPaymentStatus } from '@/types';
 
-// The props interface now correctly uses the central types
 interface InvoicesTableProps {
   invoices: Invoice[];
   userRole: 'admin' | 'staff';
-  onPaymentStatusUpdate: (invoiceId: string, newStatus: FrontendPaymentStatus) => void;
   onViewDetails: (invoice: Invoice) => void;
-  onDownloadPDF: (invoice: Invoice) => void;
   onPayNow: (invoice: Invoice) => void;
-  getPaymentStatusBadgeVariant: (status: FrontendPaymentStatus) => string;
+  onDownloadPDF: (invoice: Invoice) => void;
+  onPaymentStatusUpdate: (invoiceId: string, newStatus: FrontendPaymentStatus) => void;
+  getPaymentStatusBadgeVariant: (status: FrontendPaymentStatus) => 'default' | 'destructive' | 'secondary';
 }
 
 export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   invoices,
   userRole,
-  onPaymentStatusUpdate,
   onViewDetails,
-  onDownloadPDF,
   onPayNow,
-  getPaymentStatusBadgeVariant,
+  onDownloadPDF,
+  onPaymentStatusUpdate,
+  getPaymentStatusBadgeVariant
 }) => {
-  // Helper functions
-  const getStatusIcon = (status: FrontendPaymentStatus) => {
-    switch (status) {
-      case 'paid': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'unpaid': return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'partially_paid': return <Clock className="w-4 h-4 text-blue-500" />;
-      case 'overdue': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default: return <Clock className="w-4 h-4 text-gray-500" />;
-    }
-  };
-
-  const formatPaymentStatus = (status: FrontendPaymentStatus) => {
-    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-  };
+  const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
 
   return (
-    <div className="bg-white rounded-lg border">
+    <div className="rounded-md border bg-white shadow-sm">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="bg-gray-50">
             <TableHead>Invoice ID</TableHead>
             <TableHead>Order ID</TableHead>
             <TableHead>Customer</TableHead>
-            <TableHead>Amount</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Due Date</TableHead>
+            <TableHead>Total</TableHead>
+            <TableHead>Issued</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {invoices.map((invoice) => (
-            <TableRow key={invoice.id} className="hover:bg-muted/50">
-              <TableCell className="font-medium text-blue-600">{invoice.id}</TableCell>
+            <TableRow key={invoice.id}>
+              <TableCell className="font-medium">{invoice.id}</TableCell>
               <TableCell>{invoice.orderId}</TableCell>
               <TableCell>{invoice.customerName}</TableCell>
-              <TableCell className="font-medium">${invoice.grandTotal.toFixed(2)}</TableCell>
               <TableCell>
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon(invoice.paymentStatus)}
-                  <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus) as any}>
-                    {formatPaymentStatus(invoice.paymentStatus)}
-                  </Badge>
-                </div>
+                <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus)}>
+                  {invoice.paymentStatus.replace('_', ' ')}
+                </Badge>
               </TableCell>
-              <TableCell>{format(new Date(invoice.dueDate), 'MMM dd, yyyy')}</TableCell>
+              <TableCell>{formatCurrency(invoice.grandTotal)}</TableCell>
+              <TableCell>{formatDate(invoice.issueDate)}</TableCell>
               <TableCell className="text-right">
-                <div className="flex items-center justify-end space-x-2">
-                  {userRole === 'staff' && invoice.paymentStatus !== 'paid' && (
-                    <Button size="sm" onClick={() => onPayNow(invoice)}>
-                      <CreditCard className="w-4 h-4 mr-2" /> Pay Now
-                    </Button>
-                  )}
+                <div className="flex items-center justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => onViewDetails(invoice)}>
                     <Eye className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDownloadPDF(invoice)}>
-                    <Download className="w-4 h-4" />
-                  </Button>
+                  {userRole === 'staff' && (invoice.paymentStatus === 'unpaid' || invoice.paymentStatus === 'partially_paid') && (
+                    <Button variant="default" size="sm" onClick={() => onPayNow(invoice)}>
+                        <CreditCard className="w-4 h-4 mr-2" /> Pay
+                    </Button>
+                  )}
+                   <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                           <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onDownloadPDF(invoice)}>
+                           <Download className="w-4 h-4 mr-2" /> Download PDF
+                        </DropdownMenuItem>
+                        {userRole === 'admin' && invoice.paymentStatus !== 'paid' && (
+                            <DropdownMenuItem onClick={() => onPaymentStatusUpdate(invoice.id, 'paid')}>
+                                Mark as Paid
+                            </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                   </DropdownMenu>
                 </div>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+       {invoices.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-lg">No invoices found.</p>
+        </div>
+      )}
     </div>
   );
 };

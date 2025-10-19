@@ -13,9 +13,7 @@ const dbConfig = {
     }
 };
 
-// GET /api/shipments/user-shipments - Fetch shipments based on user role
 router.post('/user-shipments', async (req, res) => {
-    // ... (This route is correct and remains unchanged)
     const { userId, userRole } = req.body;
     if (!userId || !userRole) {
         return res.status(400).send({ message: 'UserID and Role are required.' });
@@ -51,22 +49,21 @@ router.post('/user-shipments', async (req, res) => {
     }
 });
 
-// NEW: PUT /api/shipments/:id - A general-purpose update route for shipments
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    // We can accept multiple fields to update, not just status
     const { status, destination, estimatedDelivery } = req.body;
 
-    // Basic validation
     if (!status && !destination && !estimatedDelivery) {
         return res.status(400).send({ message: 'No update information provided.' });
     }
 
-    try {
-        const pool = await sql.connect(dbConfig);
-        const request = pool.request().input('ShipmentID', sql.Int, id);
+    const pool = await sql.connect(dbConfig);
+    const transaction = new sql.Transaction(pool);
 
-        // Dynamically build the query based on what fields are provided
+    try {
+        await transaction.begin();
+        const request = new sql.Request(transaction).input('ShipmentID', sql.Int, id);
+
         let queryParts = [];
         if (status) {
             queryParts.push("Status = @Status");
@@ -81,34 +78,43 @@ router.put('/:id', async (req, res) => {
             request.input('EstimatedDelivery', sql.Date, estimatedDelivery);
         }
         
-        const query = `UPDATE Shipments SET ${queryParts.join(', ')} WHERE ShipmentID = @ShipmentID`;
-
-        await request.query(query);
+        const updateShipmentQuery = `UPDATE Shipments SET ${queryParts.join(', ')} WHERE ShipmentID = @ShipmentID`;
+        await request.query(updateShipmentQuery);
         
-        // Handle the special logic for 'Delivered' status
-        if (status === 'Delivered') {
-            const transaction = new sql.Transaction(pool);
-            await transaction.begin();
-            try {
-                const orderResult = await new sql.Request(transaction)
-                    .input('ShipmentID', sql.Int, id)
-                    .query('SELECT OrderID FROM Shipments WHERE ShipmentID = @ShipmentID');
+        if (status) {
+            const orderResult = await new sql.Request(transaction).input('ShipmentID', sql.Int, id).query('SELECT OrderID FROM Shipments WHERE ShipmentID = @ShipmentID');
+            
+            if (orderResult.recordset.length > 0) {
                 const { OrderID } = orderResult.recordset[0];
+                let newOrderStatus = '';
 
-                await new sql.Request(transaction)
-                    .input('OrderID', sql.Int, OrderID)
-                    .query("UPDATE Orders SET Status = 'Delivered' WHERE OrderID = @OrderID");
-                
-                await transaction.commit();
-            } catch (err) {
-                await transaction.rollback();
-                throw err; // Propagate error to the outer catch block
+                // --- LOGIC FIX: Correctly map all shipment statuses to order statuses ---
+                switch (status) {
+                    case 'Pending':
+                        newOrderStatus = 'Dispatched';
+                        break;
+                    case 'In Transit':
+                        newOrderStatus = 'Dispatched'; // Order is still considered 'Dispatched' while in transit
+                        break;
+                    case 'Delivered':
+                        newOrderStatus = 'Delivered';
+                        break;
+                }
+
+                if (newOrderStatus) {
+                    await new sql.Request(transaction)
+                        .input('OrderID', sql.Int, OrderID)
+                        .input('Status', sql.NVarChar, newOrderStatus)
+                        .query("UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID");
+                }
             }
         }
 
+        await transaction.commit();
         res.status(200).send({ message: `Shipment updated successfully.` });
 
     } catch (error) {
+        await transaction.rollback();
         console.error('Error updating shipment:', error);
         res.status(500).send({ message: 'Server error during shipment update' });
     }

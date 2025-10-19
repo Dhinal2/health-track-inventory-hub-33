@@ -26,7 +26,7 @@ export interface Shipment {
 }
 
 
-//Invoices 
+//Invoices
 // Frontend-specific status type for better component logic
 export type FrontendPaymentStatus = 'paid' | 'unpaid' | 'partially_paid' | 'overdue';
 
@@ -71,4 +71,25 @@ export interface Invoice {
     method: string;
   }>;
   notes?: string;
+}
+
+// --- Find and replace this line in src/types.ts ---
+export type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Delivered' | 'Awaiting Payment' | 'Pending Final Payment' | 'Received' | 'Completed' | 'Dispatched';
+
+export interface OrderItem {
+  OrderItemID: number;
+  ProductID: number;
+  ProductName: string;
+  Quantity: number;
+  UnitPrice: number;
+}
+
+export interface Order {
+  OrderID: number;
+  PlacedBy: string;
+  UserID: number;
+  Status: OrderStatus;
+  TotalAmount: number;
+  OrderDate: string;
+  Items: OrderItem[];
 }

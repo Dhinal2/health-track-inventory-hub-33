@@ -15,7 +15,7 @@ const dbConfig = {
     }
 };
 
-// GET /api/invoices/user-invoices - Fetch invoices based on role
+// GET /api/invoices/user-invoices - Fetch invoices based on user role
 router.post('/user-invoices', async (req, res) => {
     const { userId, userRole } = req.body;
     if (!userId || !userRole) {
@@ -78,21 +78,19 @@ router.post('/:id/pay', async (req, res) => {
             `);
 
         if (invoiceDetails.recordset.length === 0) {
+            await transaction.rollback();
             return res.status(404).send({ message: 'Invoice not found.' });
         }
         
         const { TotalAmount, OrderID, TotalPaid } = invoiceDetails.recordset[0];
         const halfAmount = TotalAmount / 2;
 
-        // --- NEW VALIDATION LOGIC ---
-        // If it's a partial payment, it must be at least 50%
-        if (parseFloat(amountPaid) < TotalAmount && parseFloat(amountPaid) < halfAmount) {
+        if (parseFloat(amountPaid) < TotalAmount && TotalPaid == 0 && parseFloat(amountPaid) < halfAmount) {
             await transaction.rollback();
             return res.status(400).send({ 
                 message: `Partial payments must be at least 50% of the total amount. Minimum payment: $${halfAmount.toFixed(2)}` 
             });
         }
-        // --- END NEW LOGIC ---
 
         await new sql.Request(transaction)
             .input('InvoiceID', sql.Int, id)
@@ -115,18 +113,32 @@ router.post('/:id/pay', async (req, res) => {
 
         if (currentOrderStatus === 'Awaiting Payment') {
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("INSERT INTO Shipments (OrderID, Status, Destination) VALUES (@OrderID, 'Pending', 'User Department')");
-            await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Shipped' WHERE OrderID = @OrderID");
+            await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Dispatched' WHERE OrderID = @OrderID");
         } else if (currentOrderStatus === 'Pending Final Payment' && newPaymentStatus === 'Paid') {
             // ... (inventory logic remains the same)
         }
 
         await transaction.commit();
         res.status(200).send({ message: 'Payment successful', newStatus: newPaymentStatus });
-
+    
     } catch (error) {
+        // --- THIS IS THE UPDATED PART ---
         await transaction.rollback();
-        console.error('Error processing payment:', error);
-        res.status(500).send({ message: 'Payment processing failed' });
+        // Log the full error to the server's console for debugging
+        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.error("!!!     CRITICAL ERROR During Payment    !!!");
+        console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        console.error("Timestamp:", new Date().toISOString());
+        console.error("Route: POST /api/invoices/:id/pay");
+        console.error("Full Error Object:", JSON.stringify(error, null, 2)); // This will give us the exact details
+
+        // Send a more specific error message back to the frontend
+        let errorMessage = 'Payment processing failed due to a critical server error.';
+        if (error.originalError && error.originalError.info) {
+            errorMessage = `Database Error: ${error.originalError.info.message}`;
+        }
+        
+        res.status(500).send({ message: errorMessage });
     }
 });
 

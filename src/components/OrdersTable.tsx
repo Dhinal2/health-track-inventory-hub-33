@@ -16,26 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Eye, MoreHorizontal, Check, X, Truck, FileText } from 'lucide-react';
-
-type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Delivered';
-
-interface OrderItem {
-  OrderItemID: number;
-  ProductID: number;
-  ProductName: string;
-  Quantity: number;
-  UnitPrice: number;
-}
-
-interface Order {
-  OrderID: number;
-  PlacedBy: string;
-  UserID: number;
-  Status: OrderStatus;
-  TotalAmount: number;
-  OrderDate: string;
-  Items: OrderItem[];
-}
+import { Order, OrderStatus } from '@/types';
 
 interface OrdersTableProps {
   orders: Order[];
@@ -59,9 +40,15 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
       case 'Pending': return 'text-yellow-700 bg-yellow-100 border-yellow-300';
-      case 'Approved': return 'text-blue-700 bg-blue-100 border-blue-300';
+      case 'Approved': 
+      case 'Awaiting Payment':
+        return 'text-blue-700 bg-blue-100 border-blue-300';
       case 'Rejected': return 'text-red-700 bg-red-100 border-red-300';
-      case 'Delivered': return 'text-green-700 bg-green-100 border-green-300';
+      case 'Delivered':
+      case 'Received':
+      case 'Completed':
+      case 'Pending Final Payment':
+        return 'text-green-700 bg-green-100 border-green-300';
       default: return 'text-gray-700 bg-gray-100 border-gray-300';
     }
   };

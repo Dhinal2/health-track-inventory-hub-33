@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -16,23 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-type ShipmentStatus = 'dispatched' | 'in-transit' | 'delivered';
-
-interface Shipment {
-  id: string;
-  orderId: string;
-  destination: string;
-  status: ShipmentStatus;
-  estimatedDelivery: string;
-  lastUpdated: string;
-  originCoords: [number, number];
-  currentCoords: [number, number];
-  destinationCoords: [number, number];
-  originAddress: string;
-  currentAddress: string;
-  destinationAddress: string;
-}
+import { Shipment } from '@/types'; // <-- Switched to import the full Shipment type
 
 interface EditShipmentModalProps {
   isOpen: boolean;
@@ -50,7 +33,7 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
   const [formData, setFormData] = useState({
     currentAddress: '',
     destinationAddress: '',
-    status: 'dispatched' as ShipmentStatus
+    status: 'dispatched' as Shipment['status']
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,17 +57,14 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-
     if (!formData.currentAddress.trim()) newErrors.currentAddress = 'Current location is required';
     if (!formData.destinationAddress.trim()) newErrors.destinationAddress = 'Destination is required';
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm() || !shipment) return;
 
     const updatedShipment: Shipment = {
@@ -92,7 +72,7 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
       status: formData.status,
       currentAddress: formData.currentAddress,
       destinationAddress: formData.destinationAddress,
-      destination: formData.destinationAddress
+      destination: formData.destinationAddress 
     };
 
     onShipmentUpdate(updatedShipment);
@@ -110,7 +90,7 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Shipment - {shipment.id}</DialogTitle>
+          <DialogTitle>Edit Shipment - SHP-{shipment.shipmentID.toString().padStart(4, '0')}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -144,7 +124,8 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dispatched">Pending</SelectItem>
+                  {/* --- FIX: Changed "Pending" to "Dispatched" --- */}
+                  <SelectItem value="dispatched">Dispatched</SelectItem>
                   <SelectItem value="in-transit">In Transit</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>
                 </SelectContent>
