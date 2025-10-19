@@ -64,16 +64,28 @@ router.post('/', async (req, res) => {
     const { userId, items, totalAmount } = req.body;
     const pool = await sql.connect(dbConfig);
     const transaction = new sql.Transaction(pool);
+
     try {
         await transaction.begin();
+
         const orderResult = await new sql.Request(transaction).input('UserID', sql.Int, userId).input('TotalAmount', sql.Decimal(10, 2), totalAmount).query('INSERT INTO Orders (UserID, TotalAmount) OUTPUT INSERTED.OrderID VALUES (@UserID, @TotalAmount)');
         const orderId = orderResult.recordset[0].OrderID;
+
         for (const item of items) {
-            await new sql.Request(transaction).input('OrderID', sql.Int, orderId).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).input('UnitPrice', sql.Decimal(10, 2), item.Price).query('INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice) VALUES (@OrderID, @ProductID, @Quantity, @UnitPrice)');
+            // --- THIS IS THE FIX ---
+            // The frontend sends 'UnitPrice', so we use 'item.UnitPrice' here instead of 'item.Price'
+            await new sql.Request(transaction)
+                .input('OrderID', sql.Int, orderId)
+                .input('ProductID', sql.Int, item.ProductID)
+                .input('Quantity', sql.Int, item.Quantity)
+                .input('UnitPrice', sql.Decimal(10, 2), item.UnitPrice) // Corrected from item.Price
+                .query('INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice) VALUES (@OrderID, @ProductID, @Quantity, @UnitPrice)');
         }
+        
         await new sql.Request(transaction).input('OrderID', sql.Int, orderId).input('TotalAmount', sql.Decimal(10, 2), totalAmount).query('INSERT INTO Invoices (OrderID, TotalAmount, PaymentStatus) VALUES (@OrderID, @TotalAmount, \'Unpaid\')');
         await transaction.commit();
         res.status(201).send({ message: 'Order created successfully', orderId });
+
     } catch (error) {
         await transaction.rollback();
         console.error('Error creating order:', error);
@@ -81,6 +93,35 @@ router.post('/', async (req, res) => {
     }
 });
 
+router.put('/:id/status', async (req, res) => {
+    // This route is correct and remains unchanged
+    const { id } = req.params;
+    const { status } = req.body;
+    const pool = await sql.connect(dbConfig);
+    const transaction = new sql.Transaction(pool);
+    try {
+        await transaction.begin();
+        let newStatus = status;
+        if (status === 'Approved') {
+            newStatus = 'Awaiting Payment';
+        } else if (status === 'Received') {
+            const invoiceResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT PaymentStatus FROM Invoices WHERE OrderID = @OrderID');
+            const invoice = invoiceResult.recordset[0];
+            if (invoice.PaymentStatus === 'Paid') {
+                newStatus = 'Completed';
+            } else if (invoice.PaymentStatus === 'Partially Paid') {
+                newStatus = 'Pending Final Payment';
+            }
+        }
+        await new sql.Request(transaction).input('OrderID', sql.Int, id).input('Status', sql.NVarChar, newStatus).query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
+        await transaction.commit();
+        res.status(200).send({ message: `Order status updated to ${newStatus}` });
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error updating order status:', error);
+        res.status(500).send({ message: 'Server error' });
+    }
+});
 // CORRECTED: This route is now simplified. It no longer handles shipment creation or 'Delivered' status.
 router.put('/:id/status', async (req, res) => {
     const { id } = req.params;

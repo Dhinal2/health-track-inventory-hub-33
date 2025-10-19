@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -28,6 +28,12 @@ interface OrderDetailsModalProps {
   onStatusUpdate: (orderId: number, newStatus: OrderStatus) => void;
 }
 
+interface PaymentDetails {
+    totalAmount: number;
+    amountPaid: number;
+    amountRemaining: number;
+}
+
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   isOpen,
   onClose,
@@ -36,26 +42,41 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onStatusUpdate
 }) => {
   const navigate = useNavigate();
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
+
+  useEffect(() => {
+    if (isOpen && order) {
+      const shouldFetchDetails = [
+        'Dispatched', 
+        'Delivered', 
+        'Pending Final Payment', 
+        'Received', 
+        'Completed'
+      ].includes(order.Status);
+
+      if (shouldFetchDetails) {
+        fetch(`http://localhost:3001/api/invoices/payment-details/${order.OrderID}`)
+          .then(res => res.ok ? res.json() : Promise.reject())
+          .then(data => setPaymentDetails(data))
+          .catch(() => setPaymentDetails(null));
+      } else {
+        setPaymentDetails(null);
+      }
+    }
+  }, [isOpen, order]);
+
   if (!order) return null;
 
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  // --- FIX: Corrected return statements for all cases ---
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
       case 'Pending': return 'text-yellow-700 bg-yellow-100 border-yellow-300';
       case 'Awaiting Payment': return 'text-blue-700 bg-blue-100 border-blue-300';
       case 'Rejected': return 'text-red-700 bg-red-100 border-red-300';
-      case 'Dispatched': // <-- FIX: Changed from 'Shipped'
+      case 'Dispatched':
       case 'Delivered': 
       case 'Received':
       case 'Completed':
@@ -65,12 +86,13 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
     }
   };
 
+  // --- FIX: Corrected return statements for all cases ---
   const getStatusIcon = (status: OrderStatus) => {
     switch (status) {
       case 'Pending': return <Package className="w-4 h-4" />;
       case 'Awaiting Payment': return <Check className="w-4 h-4" />;
       case 'Rejected': return <X className="w-4 h-4" />;
-      case 'Dispatched': // <-- FIX: Changed from 'Shipped'
+      case 'Dispatched':
       case 'Delivered':
       case 'Received':
       case 'Completed':
@@ -106,14 +128,25 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
-              <CardHeader><CardTitle className="text-lg">Order Information</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-lg">Order & Payment Information</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between"><span className="text-gray-600">Order ID:</span><span className="font-medium">ORD-{order.OrderID.toString().padStart(4, '0')}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600">Placed By:</span><span className="font-medium">{order.PlacedBy}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">User ID:</span><span className="font-medium">#{order.UserID}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600">Order Date:</span><span className="font-medium">{formatDate(order.OrderDate)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Status:</span><Badge className={getStatusColor(order.Status)}>{order.Status}</Badge></div>
-                <div className="flex justify-between pt-2 border-t"><span className="text-gray-600 font-medium">Total Amount:</span><span className="font-bold text-lg text-blue-600">{formatCurrency(order.TotalAmount)}</span></div>
+                <div className="flex justify-between border-t pt-3"><span className="text-gray-600 font-medium">Total Amount:</span><span className="font-bold text-lg">{formatCurrency(order.TotalAmount)}</span></div>
+                
+                {paymentDetails && paymentDetails.amountPaid > 0 && (
+                    <>
+                        <div className="flex justify-between text-green-600">
+                            <span className="font-medium">Amount Paid:</span>
+                            <span className="font-medium">{formatCurrency(paymentDetails.amountPaid)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600 border-t pt-2">
+                            <span className="font-bold">Amount Remaining:</span>
+                            <span className="font-bold">{formatCurrency(paymentDetails.amountRemaining)}</span>
+                        </div>
+                    </>
+                )}
               </CardContent>
             </Card>
 
@@ -127,15 +160,14 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                       <Button variant="destructive" onClick={() => handleStatusChange('Rejected')} className="w-full"><X className="w-4 h-4 mr-2" />Reject Order</Button>
                     </>
                   )}
-                  {/* FIX: Changed from 'Shipped' */}
                   {(order.Status === 'Awaiting Payment' || order.Status === 'Dispatched' || order.Status === 'Delivered') && (
                      <div className="text-center text-gray-500 py-4">
                         <p>This order is in the shipment phase.</p>
-                        <p className="text-sm">Please manage its status from the Shipments page.</p>
+                        <p className="text-sm">Manage its status from the Shipments page.</p>
                      </div>
                   )}
                   {order.Status === 'Completed' && ( <Button variant="outline" className="w-full"><FileText className="w-4 h-4 mr-2" />Generate Invoice</Button>)}
-                  {order.Status === 'Rejected' && (<div className="text-center text-gray-500 py-4"><p>This order has been rejected.</p><p className="text-sm">No further actions available.</p></div>)}
+                  {order.Status === 'Rejected' && (<div className="text-center text-gray-500 py-4"><p>This order has been rejected.</p></div>)}
                 </CardContent>
               </Card>
             )}
@@ -152,7 +184,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                     <p className="text-sm text-gray-600 mt-4">
                       {order.Status === 'Pending' && 'Your order is awaiting admin approval.'}
                       {order.Status === 'Awaiting Payment' && 'Your order has been approved. Please proceed with payment.'}
-                      {order.Status === 'Dispatched' && 'Your order has been dispatched and is on its way.'} {/* <-- FIX: Changed from 'Shipped' */}
+                      {order.Status === 'Dispatched' && 'Your order has been dispatched and is on its way.'}
                       {order.Status === 'Rejected' && 'Unfortunately, your order was not approved.'}
                       {order.Status === 'Delivered' && 'Your order has arrived. Please confirm receipt.'}
                       {order.Status === 'Pending Final Payment' && 'Your order has been delivered. Please complete the final payment.'}
@@ -171,23 +203,12 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <CardContent>
               <div className="rounded-md border">
                 <Table>
-                  <TableHeader><TableRow className="bg-gray-50"><TableHead className="font-semibold">Product Name</TableHead><TableHead className="font-semibold">Product ID</TableHead><TableHead className="text-right font-semibold">Quantity</TableHead><TableHead className="text-right font-semibold">Unit Price</TableHead><TableHead className="text-right font-semibold">Total</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-gray-50"><TableHead>Product Name</TableHead><TableHead>Product ID</TableHead><TableHead className="text-right">Quantity</TableHead><TableHead className="text-right">Unit Price</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {order.Items.map((item) => (<TableRow key={item.OrderItemID}><TableCell className="font-medium">{item.ProductName}</TableCell><TableCell className="text-gray-600">#{item.ProductID}</TableCell><TableCell className="text-right">{item.Quantity}</TableCell><TableCell className="text-right">{formatCurrency(item.UnitPrice)}</TableCell><TableCell className="text-right font-medium">{formatCurrency(item.UnitPrice * item.Quantity)}</TableCell></TableRow>))}
+                    {order.Items.map((item) => (<TableRow key={item.OrderItemID}><TableCell className="font-medium">{item.ProductName}</TableCell><TableCell>#{item.ProductID}</TableCell><TableCell className="text-right">{item.Quantity}</TableCell><TableCell className="text-right">{formatCurrency(item.UnitPrice)}</TableCell><TableCell className="text-right font-medium">{formatCurrency(item.UnitPrice * item.Quantity)}</TableCell></TableRow>))}
                     <TableRow className="bg-blue-50 border-t-2"><TableCell colSpan={4} className="text-right font-semibold text-gray-700">Order Total:</TableCell><TableCell className="text-right font-bold text-lg text-blue-600">{formatCurrency(order.TotalAmount)}</TableCell></TableRow>
                   </TableBody>
                 </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-50">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div><p className="text-sm text-gray-600">Total Items</p><p className="text-2xl font-bold text-gray-800">{order.Items.reduce((sum, item) => sum + item.Quantity, 0)}</p></div>
-                <div><p className="text-sm text-gray-600">Product Types</p><p className="text-2xl font-bold text-gray-800">{order.Items.length}</p></div>
-                <div><p className="text-sm text-gray-600">Order Status</p><p className="text-2xl font-bold text-gray-800">{order.Status}</p></div>
-                <div><p className="text-sm text-gray-600">Total Value</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(order.TotalAmount)}</p></div>
               </div>
             </CardContent>
           </Card>

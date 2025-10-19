@@ -91,12 +91,26 @@ router.post('/:id/pay', async (req, res) => {
         const { Status: currentOrderStatus, UserID } = orderResult.recordset[0];
 
         if (currentOrderStatus === 'Awaiting Payment') {
+            // --- NEW LOGIC: Reduce Main Product Stock ---
+            // 1. Get all items from the order
+            const orderItemsResult = await new sql.Request(transaction)
+                .input('OrderID', sql.Int, OrderID)
+                .query('SELECT ProductID, Quantity FROM OrderItems WHERE OrderID = @OrderID');
+            
+            // 2. Loop through each item and decrement the stock in the main Products table
+            for (const item of orderItemsResult.recordset) {
+                await new sql.Request(transaction)
+                    .input('Quantity', sql.Int, item.Quantity)
+                    .input('ProductID', sql.Int, item.ProductID)
+                    .query('UPDATE Products SET StockQuantity = StockQuantity - @Quantity WHERE ProductID = @ProductID');
+            }
+            // --- END NEW LOGIC ---
+
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("INSERT INTO Shipments (OrderID, Status, Destination) VALUES (@OrderID, 'Pending', 'User Department')");
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Dispatched' WHERE OrderID = @OrderID");
         
-        // --- LOGIC FIX: Handle final payment on a received order ---
         } else if (currentOrderStatus === 'Pending Final Payment' && newPaymentStatus === 'Paid') {
-            // The final payment has been made, so we can now complete the order and add items to inventory.
+            // This logic correctly adds items to the staff's inventory
             const orderItemsResult = await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query('SELECT * FROM OrderItems WHERE OrderID = @OrderID');
             for (const item of orderItemsResult.recordset) {
                 const inventoryCheck = await new sql.Request(transaction).input('UserID', sql.Int, UserID).input('ProductID', sql.Int, item.ProductID).query('SELECT * FROM Inventory WHERE UserID = @UserID AND ProductID = @ProductID');
@@ -106,7 +120,6 @@ router.post('/:id/pay', async (req, res) => {
                     await new sql.Request(transaction).input('UserID', sql.Int, UserID).input('ProductID', sql.Int, item.ProductID).input('Quantity', sql.Int, item.Quantity).query('INSERT INTO Inventory (UserID, ProductID, StockQuantity, ReorderThreshold, AutoReorder) VALUES (@UserID, @ProductID, @Quantity, 50, 0)');
                 }
             }
-            // Finally, update the order status to 'Completed'
             await new sql.Request(transaction).input('OrderID', sql.Int, OrderID).query("UPDATE Orders SET Status = 'Completed' WHERE OrderID = @OrderID");
         }
 
@@ -115,8 +128,8 @@ router.post('/:id/pay', async (req, res) => {
 
     } catch (error) {
         await transaction.rollback();
-        console.error('CRITICAL ERROR processing payment:', error);
-        let errorMessage = 'Payment processing failed due to a server error.';
+        console.error("CRITICAL ERROR processing payment:", error);
+        let errorMessage = 'Payment processing failed due to a critical server error.';
         if (error.originalError && error.originalError.info) {
             errorMessage = `Database Error: ${error.originalError.info.message}`;
         }
@@ -167,6 +180,43 @@ router.post('/by-order', async (req, res) => {
         }
         
         res.status(500).send({ message: errorMessage });
+    }
+});
+
+// GET /api/invoices/payment-details/:orderId - Fetch payment summary for an order
+router.get('/payment-details/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+
+    if (!orderId) {
+        return res.status(400).send({ message: 'OrderID is required.' });
+    }
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('OrderID', sql.Int, orderId)
+            .query(`
+                SELECT 
+                    i.TotalAmount,
+                    ISNULL((SELECT SUM(Amount) FROM Payments p WHERE p.InvoiceID = i.InvoiceID), 0) as AmountPaid
+                FROM Invoices i
+                WHERE i.OrderID = @OrderID
+            `);
+
+        if (result.recordset.length === 0) {
+            return res.status(404).send({ message: 'No invoice found for this order to calculate payment details.' });
+        }
+
+        const details = result.recordset[0];
+        res.json({
+            totalAmount: details.TotalAmount,
+            amountPaid: details.AmountPaid,
+            amountRemaining: details.TotalAmount - details.AmountPaid
+        });
+
+    } catch (error) {
+        console.error('Error fetching payment details:', error);
+        res.status(500).send({ message: 'Server error while fetching payment details.' });
     }
 });
 

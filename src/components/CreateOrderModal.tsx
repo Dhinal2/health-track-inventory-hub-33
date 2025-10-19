@@ -19,8 +19,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+// --- FIX: Add 'Name' to the Product interface ---
 interface Product {
   ProductID: number;
+  Name: string; // This was missing
   Description: string;
   Price: number;
   StockQuantity: number;
@@ -104,7 +106,8 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
       const product = products.find(p => p.ProductID === Number(value));
       if (product) {
         item.ProductID = product.ProductID;
-        item.ProductName = product.Description;
+        // --- FIX: Use product's Name for the ProductName field ---
+        item.ProductName = product.Name;
         item.UnitPrice = product.Price;
       }
     } else if (field === 'Quantity') {
@@ -114,7 +117,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
       if (product && requestedQty > product.StockQuantity) {
         toast({
           title: "Insufficient Stock",
-          description: `Only ${product.StockQuantity} units available for ${product.Description}.`,
+          description: `Only ${product.StockQuantity} units available for ${product.Name}.`,
           variant: "destructive",
         });
         item.Quantity = product.StockQuantity;
@@ -238,7 +241,8 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                                 <SelectContent>
                                   {products.map(product => (
                                     <SelectItem key={product.ProductID} value={product.ProductID.toString()}>
-                                      {product.Description} - ${product.Price.toFixed(2)} ({product.StockQuantity} in stock)
+                                      {/* --- FIX: Display Product Name instead of Description --- */}
+                                      {product.Name} - ${product.Price.toFixed(2)} ({product.StockQuantity} in stock)
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

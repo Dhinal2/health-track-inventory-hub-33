@@ -26,6 +26,7 @@ const Payment = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff' } | null>(null);
+  const [amountAlreadyPaid, setAmountAlreadyPaid] = useState(0);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -56,23 +57,21 @@ const Payment = () => {
         const data: Invoice = await response.json();
         setInvoice(data);
 
-        // --- LOGIC FIX: Set payment amount to remaining balance ---
+        // --- LOGIC FIX: Calculate and set the correct remaining balance ---
         if (data.PaymentStatus === 'Partially Paid') {
-          const remainingAmount = data.TotalAmount / 2;
-          setPaymentAmount(remainingAmount.toString());
+            const alreadyPaid = data.TotalAmount / 2; // Assuming partial payment is always 50%
+            const remaining = data.TotalAmount - alreadyPaid;
+            setAmountAlreadyPaid(alreadyPaid);
+            setPaymentAmount(remaining.toString());
         } else {
-          setPaymentAmount(data.TotalAmount.toString());
+            setAmountAlreadyPaid(0);
+            setPaymentAmount(data.TotalAmount.toString());
         }
-        // --- END FIX ---
       } else {
         throw new Error('Invoice not found');
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Could not fetch invoice for this order.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Could not fetch invoice for this order.', variant: 'destructive' });
       setInvoice(null);
     } finally {
       setIsLoading(false);
@@ -97,20 +96,13 @@ const Payment = () => {
 
       const resData = await response.json();
       if (response.ok) {
-        toast({
-          title: 'Payment Successful',
-          description: 'Your payment has been processed.',
-        });
+        toast({ title: 'Payment Successful', description: 'Your payment has been processed.' });
         navigate('/orders');
       } else {
         throw new Error(resData.message || 'Payment failed');
       }
     } catch (error: any) {
-      toast({
-        title: 'Payment Error',
-        description: error.message || 'Could not process your payment.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Payment Error', description: error.message || 'Could not process your payment.', variant: 'destructive' });
     }
   };
 
@@ -129,7 +121,7 @@ const Payment = () => {
       );
     }
 
-    const remainingBalance = invoice.PaymentStatus === 'Partially Paid' ? invoice.TotalAmount / 2 : invoice.TotalAmount;
+    const remainingBalance = invoice.TotalAmount - amountAlreadyPaid;
 
     return (
       <Card className="w-full max-w-2xl mx-auto">
@@ -138,7 +130,9 @@ const Payment = () => {
           <div className="p-4 border rounded-md bg-gray-50">
             <h3 className="font-semibold">Order Summary</h3>
             <div className="flex justify-between mt-2"><span>Order ID:</span><span>ORD-{order.OrderID.toString().padStart(4, '0')}</span></div>
-            <div className="flex justify-between mt-1"><span>Total Amount Due:</span><span className="font-bold text-lg">${remainingBalance.toFixed(2)}</span></div>
+            <div className="flex justify-between mt-1 text-gray-600"><span>Total Amount:</span><span>${invoice.TotalAmount.toFixed(2)}</span></div>
+            {amountAlreadyPaid > 0 && <div className="flex justify-between mt-1 text-gray-600"><span>Already Paid:</span><span>-${amountAlreadyPaid.toFixed(2)}</span></div>}
+            <div className="flex justify-between mt-2 pt-2 border-t font-bold text-lg"><span>Amount Due:</span><span>${remainingBalance.toFixed(2)}</span></div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="paymentAmount">Payment Amount</Label>
