@@ -8,6 +8,15 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // --- THIS IS THE FIX ---
+    // The proxy must target the port your backend is actually running on.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001', // Changed from 5000 to 3001
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [
     react(),

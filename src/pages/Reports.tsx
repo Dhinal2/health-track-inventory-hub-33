@@ -14,11 +14,23 @@ interface User {
   role: 'admin' | 'staff';
 }
 
+// Define an interface for the summary data we expect from the backend
+interface SummaryData {
+  totalItemsInStock: number;
+  ordersThisMonth: number;
+  ordersChange: string;
+  totalRevenue: number;
+  revenueChange: string;
+  lowStockItems: number;
+}
+
 export const Reports: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [summaryData, setSummaryData] = useState<SummaryData | null>(null); // State for summary data
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedReportType, setSelectedReportType] = useState('inventory-summary');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: new Date(new Date().setMonth(new Date().getMonth() - 1)),
+    from: new Date(new Date().setDate(1)), // Start of the current month
     to: new Date()
   });
   const [selectedLocation, setSelectedLocation] = useState('all');
@@ -27,17 +39,36 @@ export const Reports: React.FC = () => {
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
-      const parsedUser = JSON.parse(userData)
-      if (parsedUser.UserID) {
-        const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
-        setUser({
-          id: parsedUser.UserID,
-          name: parsedUser.Name || 'User',
-          role: mappedRole
-        });
-      }
+      const parsedUser = JSON.parse(userData);
+      const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
+      setUser({
+        id: parsedUser.UserID,
+        name: parsedUser.Name || 'User',
+        role: mappedRole
+      });
     }
   }, []);
+
+  // Fetch summary data when the component mounts or dateRange changes
+  useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      fetch('/api/reports/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: dateRange.from, to: dateRange.to })
+      })
+      .then(res => res.json())
+      .then(data => {
+        setSummaryData(data);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        toast({ title: 'Error', description: 'Could not fetch report data.', variant: 'destructive' });
+        setIsLoading(false);
+      });
+    }
+  }, [user, dateRange, toast]);
 
   const handleExport = (format: 'pdf' | 'csv' | 'excel') => {
     toast({
@@ -71,9 +102,8 @@ export const Reports: React.FC = () => {
   }
 
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    <Layout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="border-b border-border pb-4">
           <h1 className="text-3xl font-bold text-foreground">Reports</h1>
           <p className="text-muted-foreground mt-2">
@@ -81,7 +111,6 @@ export const Reports: React.FC = () => {
           </p>
         </div>
 
-        {/* Filters */}
         <ReportsFilters
           reportTypes={reportTypes}
           selectedReportType={selectedReportType}
@@ -93,52 +122,25 @@ export const Reports: React.FC = () => {
           showLocationFilter={user?.role === 'admin'}
         />
 
-        {/* Summary Cards */}
+        {/* Pass the fetched data to the summary cards */}
         <ReportsSummaryCards 
-          reportType={selectedReportType}
+          data={summaryData}
+          isLoading={isLoading}
           userRole={user?.role || 'staff'}
-          dateRange={dateRange}
         />
 
-        {/* Export Actions */}
         <div className="flex flex-wrap gap-2 justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('csv')}
-            className="flex items-center gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Export CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('excel')}
-            className="flex items-center gap-2"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Export Excel
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('pdf')}
-            className="flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Export PDF
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport('csv')} className="flex items-center gap-2"><FileText className="h-4 w-4" />Export CSV</Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport('excel')} className="flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" />Export Excel</Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} className="flex items-center gap-2"><Download className="h-4 w-4" />Export PDF</Button>
         </div>
 
-        {/* Charts Section */}
         <ReportsChart 
           reportType={selectedReportType}
           dateRange={dateRange}
           location={selectedLocation}
         />
 
-        {/* Detailed Table */}
         <ReportsTable 
           reportType={selectedReportType}
           dateRange={dateRange}

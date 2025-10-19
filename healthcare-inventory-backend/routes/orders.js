@@ -1,26 +1,15 @@
 const express = require('express');
-const sql = require('mssql');
+const { sql, poolPromise } = require('../db'); // Import the shared connection
 const router = express.Router();
 
-const dbConfig = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!', // Make sure to use your actual password
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false,
-        trustServerCertificate: true
-    }
-};
-
-// This route remains the same
+// This route for fetching user orders is correct and remains unchanged.
 router.post('/user-orders', async (req, res) => {
     const { userId, userRole } = req.body;
     if (!userId || !userRole) {
         return res.status(400).send({ message: 'UserID and Role are required.' });
     }
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
         let query;
         if (userRole === 'Administrator') {
             query = `
@@ -45,7 +34,7 @@ router.post('/user-orders', async (req, res) => {
             const itemsResult = await pool.request()
                 .input('OrderID', sql.Int, order.OrderID)
                 .query(`
-                    SELECT oi.*, p.Name as ProductName 
+                    SELECT oi.*, p.Name as ProductName
                     FROM OrderItems oi
                     JOIN Products p ON oi.ProductID = p.ProductID
                     WHERE oi.OrderID = @OrderID
@@ -59,103 +48,91 @@ router.post('/user-orders', async (req, res) => {
     }
 });
 
-// This route remains the same
+// POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
     const { userId, items, totalAmount } = req.body;
-    const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
-
     try {
+        const pool = await poolPromise;
+        const transaction = pool.transaction();
         await transaction.begin();
+        
+        try {
+            const orderResult = await new sql.Request(transaction)
+                .input('UserID', sql.Int, userId)
+                .input('TotalAmount', sql.Decimal(10, 2), totalAmount)
+                .query('INSERT INTO Orders (UserID, TotalAmount, Status) OUTPUT INSERTED.OrderID VALUES (@UserID, @TotalAmount, \'Pending\')');
+            
+            const orderId = orderResult.recordset[0].OrderID;
 
-        const orderResult = await new sql.Request(transaction).input('UserID', sql.Int, userId).input('TotalAmount', sql.Decimal(10, 2), totalAmount).query('INSERT INTO Orders (UserID, TotalAmount) OUTPUT INSERTED.OrderID VALUES (@UserID, @TotalAmount)');
-        const orderId = orderResult.recordset[0].OrderID;
-
-        for (const item of items) {
-            // --- THIS IS THE FIX ---
-            // The frontend sends 'UnitPrice', so we use 'item.UnitPrice' here instead of 'item.Price'
+            for (const item of items) {
+                // --- THIS IS THE DEFINITIVE FIX ---
+                // The frontend's CreateOrderModal.tsx sends 'UnitPrice', so we must use 'item.UnitPrice' here.
+                await new sql.Request(transaction)
+                    .input('OrderID', sql.Int, orderId)
+                    .input('ProductID', sql.Int, item.ProductID)
+                    .input('Quantity', sql.Int, item.Quantity)
+                    .input('UnitPrice', sql.Decimal(10, 2), item.UnitPrice) // This now correctly matches the frontend
+                    .query('INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice) VALUES (@OrderID, @ProductID, @Quantity, @UnitPrice)');
+            }
+            
             await new sql.Request(transaction)
                 .input('OrderID', sql.Int, orderId)
-                .input('ProductID', sql.Int, item.ProductID)
-                .input('Quantity', sql.Int, item.Quantity)
-                .input('UnitPrice', sql.Decimal(10, 2), item.UnitPrice) // Corrected from item.Price
-                .query('INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice) VALUES (@OrderID, @ProductID, @Quantity, @UnitPrice)');
-        }
-        
-        await new sql.Request(transaction).input('OrderID', sql.Int, orderId).input('TotalAmount', sql.Decimal(10, 2), totalAmount).query('INSERT INTO Invoices (OrderID, TotalAmount, PaymentStatus) VALUES (@OrderID, @TotalAmount, \'Unpaid\')');
-        await transaction.commit();
-        res.status(201).send({ message: 'Order created successfully', orderId });
+                .input('TotalAmount', sql.Decimal(10, 2), totalAmount)
+                .query('INSERT INTO Invoices (OrderID, TotalAmount, PaymentStatus) VALUES (@OrderID, @TotalAmount, \'Unpaid\')');
 
+            await transaction.commit();
+            res.status(201).send({ message: 'Order created successfully', orderId });
+
+        } catch (err) {
+            await transaction.rollback();
+            console.error('Error in order creation transaction:', err);
+            res.status(500).send({ message: 'Failed to create order due to a transaction error.' });
+        }
     } catch (error) {
-        await transaction.rollback();
         console.error('Error creating order:', error);
         res.status(500).send({ message: 'Failed to create order' });
     }
 });
 
-router.put('/:id/status', async (req, res) => {
-    // This route is correct and remains unchanged
-    const { id } = req.params;
-    const { status } = req.body;
-    const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
-    try {
-        await transaction.begin();
-        let newStatus = status;
-        if (status === 'Approved') {
-            newStatus = 'Awaiting Payment';
-        } else if (status === 'Received') {
-            const invoiceResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT PaymentStatus FROM Invoices WHERE OrderID = @OrderID');
-            const invoice = invoiceResult.recordset[0];
-            if (invoice.PaymentStatus === 'Paid') {
-                newStatus = 'Completed';
-            } else if (invoice.PaymentStatus === 'Partially Paid') {
-                newStatus = 'Pending Final Payment';
-            }
-        }
-        await new sql.Request(transaction).input('OrderID', sql.Int, id).input('Status', sql.NVarChar, newStatus).query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
-        await transaction.commit();
-        res.status(200).send({ message: `Order status updated to ${newStatus}` });
-    } catch (error) {
-        await transaction.rollback();
-        console.error('Error updating order status:', error);
-        res.status(500).send({ message: 'Server error' });
-    }
-});
-// CORRECTED: This route is now simplified. It no longer handles shipment creation or 'Delivered' status.
+
+// This route for updating status is correct and remains unchanged.
 router.put('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
-    const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
-
+    
     try {
+        const pool = await poolPromise;
+        const transaction = pool.transaction();
         await transaction.begin();
-        let newStatus = status;
 
-        if (status === 'Approved') {
-            newStatus = 'Awaiting Payment';
-        } else if (status === 'Received') {
-            // When an order is received, check its payment status to decide the next step.
-            const invoiceResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT PaymentStatus FROM Invoices WHERE OrderID = @OrderID');
-            const invoice = invoiceResult.recordset[0];
+        try {
+            let newStatus = status;
 
-            if (invoice.PaymentStatus === 'Paid') {
-                // This case should be rare, but if paid in full before delivery, just complete it.
-                newStatus = 'Completed';
-            } else if (invoice.PaymentStatus === 'Partially Paid') {
-                // If partially paid, set status to require final payment.
-                newStatus = 'Pending Final Payment';
+            if (status === 'Approved') {
+                newStatus = 'Awaiting Payment';
+            } else if (status === 'Received') {
+                const invoiceResult = await new sql.Request(transaction).input('OrderID', sql.Int, id).query('SELECT PaymentStatus FROM Invoices WHERE OrderID = @OrderID');
+                const invoice = invoiceResult.recordset[0];
+
+                if (invoice.PaymentStatus === 'Paid') {
+                    newStatus = 'Completed';
+                } else if (invoice.PaymentStatus === 'Partially Paid') {
+                    newStatus = 'Pending Final Payment';
+                }
             }
+            
+            await new sql.Request(transaction)
+                .input('OrderID', sql.Int, id)
+                .input('Status', sql.NVarChar, newStatus)
+                .query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
+
+            await transaction.commit();
+            res.status(200).send({ message: `Order status updated to ${newStatus}` });
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
         }
-        
-        await new sql.Request(transaction).input('OrderID', sql.Int, id).input('Status', sql.NVarChar, newStatus).query('UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID');
-
-        await transaction.commit();
-        res.status(200).send({ message: `Order status updated to ${newStatus}` });
-
     } catch (error) {
-        await transaction.rollback();
         console.error('Error updating order status:', error);
         res.status(500).send({ message: 'Server error' });
     }

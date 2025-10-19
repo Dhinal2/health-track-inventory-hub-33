@@ -93,3 +93,12 @@ export interface Order {
   OrderDate: string;
   Items: OrderItem[];
 }
+
+export interface UserData {
+  id: number;
+  name: string;
+  email: string;
+  role: 'Administrator' | 'Healthcare Staff';
+  status: 'Active' | 'Inactive';
+  contactNumber?: string;
+}

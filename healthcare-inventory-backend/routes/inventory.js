@@ -1,33 +1,15 @@
 const express = require('express');
-const sql = require('mssql');
+const { sql, poolPromise } = require('../db');
 const router = express.Router();
-
-const dbConfig = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!', // Your actual password
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false,
-        trustServerCertificate: true,
-        // Adding a connection timeout to prevent hangs
-        connectionTimeout: 15000 
-    }
-};
 
 router.post('/user-inventory', async (req, res) => {
     const { userId, userRole } = req.body;
-    console.log(`[LOG] Received /user-inventory request. User: ${userId}, Role: ${userRole}`);
-
     if (!userId || !userRole) {
         return res.status(400).send('UserID and Role are required.');
     }
 
     try {
-        console.log('[LOG] Step 1: Attempting to connect to DB...');
-        const pool = await sql.connect(dbConfig);
-        console.log('[LOG] Step 2: DB Connection successful.');
-
+        const pool = await poolPromise;
         let query;
         const selectFields = `i.InventoryID, p.ProductID, p.Price, p.Name, i.StockQuantity, i.ReorderThreshold, i.AutoReorder`;
 
@@ -42,10 +24,7 @@ router.post('/user-inventory', async (req, res) => {
             request.input('UserID', sql.Int, userId);
         }
 
-        console.log('[LOG] Step 3: Executing inventory query...');
         const result = await request.query(query);
-        console.log(`[LOG] Step 4: Query successful. Found ${result.recordset.length} items.`);
-
         res.json(result.recordset);
 
     } catch (error) {
@@ -54,12 +33,11 @@ router.post('/user-inventory', async (req, res) => {
     }
 });
 
-// The PUT route for configuration is likely correct, but ensure it matches this
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { ReorderThreshold, AutoReorder, UserID } = req.body;
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
         await pool.request()
             .input('InventoryID', sql.Int, id)
             .input('UserID', sql.Int, UserID)

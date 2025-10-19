@@ -1,25 +1,15 @@
 const express = require('express');
-const sql = require('mssql');
+const { sql, poolPromise } = require('../db');
 const router = express.Router();
-
-const dbConfig = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!', // Make sure to use your actual password
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false,
-        trustServerCertificate: true
-    }
-};
 
 // GET all products
 router.get('/', async (req, res) => {
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
         const result = await pool.request().query('SELECT * FROM Products');
         res.json(result.recordset);
     } catch (err) {
+        console.error('Error fetching products:', err);
         res.status(500).send(err.message);
     }
 });
@@ -28,7 +18,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const { Name, Description, Price, StockQuantity } = req.body;
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
         const result = await pool.request()
             .input('Name', sql.NVarChar, Name)
             .input('Description', sql.NVarChar, Description)
@@ -37,6 +27,7 @@ router.post('/', async (req, res) => {
             .query('INSERT INTO Products (Name, Description, Price, StockQuantity) OUTPUT INSERTED.* VALUES (@Name, @Description, @Price, @StockQuantity)');
         res.status(201).json(result.recordset[0]);
     } catch (err) {
+        console.error('Error creating product:', err);
         res.status(500).send(err.message);
     }
 });
@@ -46,7 +37,7 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { Name, Description, Price, StockQuantity } = req.body;
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, id)
             .input('Name', sql.NVarChar, Name)
@@ -56,23 +47,52 @@ router.put('/:id', async (req, res) => {
             .query('UPDATE Products SET Name = @Name, Description = @Description, Price = @Price, StockQuantity = @StockQuantity WHERE ProductID = @id');
         res.status(200).send('Product updated successfully');
     } catch (err) {
+        console.error('Error updating product:', err);
         res.status(500).send(err.message);
     }
 });
 
-// DELETE a product (for Admins)
+// --- THIS IS THE CORRECTED DELETE ROUTE ---
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('id', sql.Int, id)
-            .query('DELETE FROM Products WHERE ProductID = @id');
-        res.status(200).send('Product deleted successfully');
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+
+        try {
+            // Important: First, delete references from child tables.
+            // Note: This will permanently remove the item from all past orders.
+            await new sql.Request(transaction)
+                .input('ProductID', sql.Int, id)
+                .query('DELETE FROM OrderItems WHERE ProductID = @ProductID');
+
+            await new sql.Request(transaction)
+                .input('ProductID', sql.Int, id)
+                .query('DELETE FROM Inventory WHERE ProductID = @ProductID');
+
+            // Finally, delete the product from the parent table.
+            const result = await new sql.Request(transaction)
+                .input('ProductID', sql.Int, id)
+                .query('DELETE FROM Products WHERE ProductID = @ProductID');
+
+            await transaction.commit();
+
+            if (result.rowsAffected[0] > 0) {
+                res.status(200).send('Product and all associated data deleted successfully');
+            } else {
+                res.status(404).send('Product not found');
+            }
+
+        } catch (err) {
+            await transaction.rollback();
+            // Re-throw the error to be caught by the outer catch block
+            throw err;
+        }
     } catch (err) {
-        res.status(500).send(err.message);
+        console.error('Error deleting product:', err);
+        res.status(500).send({ message: 'Failed to delete product.', error: err.message });
     }
 });
-
 
 module.exports = router;

@@ -1,22 +1,11 @@
 const express = require('express');
-const sql = require('mssql');
+const { poolPromise } = require('../db');
 const router = express.Router();
-
-const dbConfig = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!', // Make sure this is your correct password
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false,
-        trustServerCertificate: true
-    }
-};
 
 // GET /api/dashboard/stats
 router.get('/stats', async (req, res) => {
     try {
-        const pool = await sql.connect(dbConfig);
+        const pool = await poolPromise;
 
         // 1. Get Total Products
         const totalProductsResult = await pool.request().query('SELECT COUNT(*) as totalProducts FROM Products');

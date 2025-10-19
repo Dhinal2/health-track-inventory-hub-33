@@ -1,42 +1,64 @@
-
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
 interface LayoutProps {
   children: React.ReactNode;
-  userRole?: 'admin' | 'staff';
-  userName?: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, userRole, userName }) => {
+export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+  // This state holds the user data exactly as it is in localStorage
+  const [user, setUser] = useState<{ Name: string; Role: string } | null>(null);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser({
-        name: parsedUser.name || parsedUser.email?.split('@')[0] || 'User',
-        role: parsedUser.role || 'staff'
-      });
-    }
+    // This function reads the user's data from storage
+    const fetchUser = () => {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+    };
+
+    fetchUser(); // Run once on component load
+
+    // This listens for the 'userUpdated' signal from the Settings page
+    const handleUserUpdate = () => {
+      fetchUser();
+    };
+    window.addEventListener('userUpdated', handleUserUpdate);
+
+    // Clean up the listener
+    return () => {
+      window.removeEventListener('userUpdated', handleUserUpdate);
+    };
   }, []);
 
-  const currentUserRole = userRole || user?.role || 'staff';
-  const currentUserName = userName || user?.name || 'User';
+  // Show a loading message while the user data is being read
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // --- THIS IS THE DEFINITIVE FIX ---
+  // We now correctly map the full role name from the database (e.g., "Administrator")
+  // to the lowercase shorthand the app's components expect (e.g., "admin").
+  const currentUserRole = user.Role === 'Administrator' ? 'admin' : 'staff';
+  const currentUserName = user.Name;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        collapsed={sidebarCollapsed} 
+      <Sidebar
+        collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        userRole={currentUserRole}
+        userRole={currentUserRole} // This now passes the correct 'admin' or 'staff' role
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-        <Header 
-          userName={currentUserName} 
+        <Header
+          userName={currentUserName}
           userRole={currentUserRole}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         />

@@ -30,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, userRole 
     { name: 'Shipments', href: '/shipments', icon: Truck, roles: ['admin', 'staff'] },
     { name: 'Invoices', href: '/invoices', icon: FileText, roles: ['admin', 'staff'] },
     { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin'] },
-    { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
+    { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin','staff'] },
   ];
 
   const filteredItems = navigationItems.filter(item => 

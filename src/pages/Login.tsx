@@ -21,11 +21,12 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Map the role to the format expected by the backend ('Administrator' or 'Healthcare Staff')
     const roleToSend = role === 'admin' ? 'Administrator' : 'Healthcare Staff';
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      // --- THIS IS THE FIX ---
+      // Use the relative path to allow the Vite proxy to handle the request.
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -33,18 +34,18 @@ const Login = () => {
         body: JSON.stringify({
           email: email,
           password: password,
-          role: roleToSend, // Send the correctly formatted role
+          role: roleToSend,
         }),
       });
 
       if (response.ok) {
         const user = await response.json();
-        // Store user data from the backend in localStorage
+        // This correctly stores the full user object from your backend
         localStorage.setItem('user', JSON.stringify(user));
         
         toast({
           title: "Login Successful",
-          description: `Welcome back, ${user.name}!`,
+          description: `Welcome back, ${user.Name}!`, // Use user.Name as sent from backend
         });
         
         navigate('/'); // Redirect to the dashboard

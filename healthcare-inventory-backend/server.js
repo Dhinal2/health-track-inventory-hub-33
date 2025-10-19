@@ -10,6 +10,8 @@ const shipmentRoutes = require('./routes/shipments');
 const inventoryRoutes = require('./routes/inventory');
 const dashboardRoutes = require('./routes/dashboard');
 const invoiceRoutes = require('./routes/invoices');
+const usersRouter = require('./routes/users');
+const reportsRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,7 +48,8 @@ app.use('/api/shipments', shipmentRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/invoices', invoiceRoutes);
-console.log("  -> ✨ Registered /api/invoices"); // <-- ADDED LOG
+app.use('/api/users', usersRouter); 
+app.use('/api/reports', reportsRoutes);
 
 console.log("✅ [API] All routes registered.");
 
