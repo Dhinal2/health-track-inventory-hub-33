@@ -4,17 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Activity, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    name: '', // Combined first and last name
+    name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'Healthcare Staff' as 'Administrator' | 'Healthcare Staff', // Corrected type
     contactNumber: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -42,7 +40,7 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/signup', {
+      const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,7 +49,7 @@ const Signup = () => {
           Name: formData.name,
           Email: formData.email,
           Password: formData.password,
-          Role: formData.role,
+          Role: 'Healthcare Staff', // Role is now hardcoded
           ContactNumber: formData.contactNumber,
         }),
       });
@@ -128,22 +126,6 @@ const Signup = () => {
                 value={formData.contactNumber}
                 onChange={(e) => handleInputChange('contactNumber', e.target.value)}
                 />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select 
-                value={formData.role} 
-                onValueChange={(value: 'Administrator' | 'Healthcare Staff') => handleInputChange('role', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Healthcare Staff">Healthcare Staff</SelectItem>
-                  <SelectItem value="Administrator">Administrator</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-2">

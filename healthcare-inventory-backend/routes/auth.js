@@ -1,7 +1,7 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt'); // <-- THE FIX
 const router = express.Router();
-const { sql, poolPromise } = require('../db'); // <-- IMPORT the connection from db.js
+const { sql, poolPromise } = require('../db');
 
 // POST /api/auth/signup - Register a new user
 router.post('/signup', async (req, res) => {
@@ -12,7 +12,7 @@ router.post('/signup', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(Password, salt);
 
-        const pool = await poolPromise; // <-- USE the connection pool
+        const pool = await poolPromise;
         await pool.request()
             .input('Name', sql.NVarChar, Name)
             .input('Email', sql.NVarChar, Email)
@@ -30,41 +30,43 @@ router.post('/signup', async (req, res) => {
 
 // POST /api/auth/login - Log a user in
 router.post('/login', async (req, res) => {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).send({ message: 'Email and password are required.' });
+    }
 
     try {
-        const pool = await poolPromise; // <-- USE the connection pool
-        const result = await pool.request()
+        const pool = await poolPromise;
+        // First, find the user by email only
+        const userResult = await pool.request()
             .input('Email', sql.NVarChar, email)
-            .query('SELECT * FROM Users WHERE Email = @Email');
+            .query('SELECT UserID, Name, Email, Role, Password FROM Users WHERE Email = @Email');
 
-        const user = result.recordset[0];
-
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+        if (userResult.recordset.length === 0) {
+            // User not found
+            return res.status(401).send({ message: 'Invalid credentials. Please check your email and password.' });
         }
 
-        const isMatch = await bcrypt.compare(password, user.Password);
+        const user = userResult.recordset[0];
+        const storedHash = user.Password;
 
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+        // Now, securely compare the provided password with the stored hash
+        const passwordsMatch = await bcrypt.compare(password, storedHash);
+
+        if (passwordsMatch) {
+            res.json({
+                UserID: user.UserID,
+                Name: user.Name,
+                Email: user.Email,
+                Role: user.Role
+            });
+        } else {
+            // Passwords do not match.
+            res.status(401).send({ message: 'Invalid credentials. Please check your email and password.' });
         }
-        
-        if (user.Role !== role) {
-            return res.status(401).json({ message: 'Role does not match' });
-        }
-
-        // The critical fix: We send the UserID back to the frontend
-        res.status(200).json({
-            UserID: user.UserID, // This is essential for the frontend to work
-            Email: user.Email,
-            Name: user.Name,
-            Role: user.Role
-        });
-
     } catch (error) {
-        console.error(error);
-        res.status(500).send({ message: 'Server error during login' });
+        console.error('Login error:', error);
+        res.status(500).send({ message: 'Server error during login.' });
     }
 });
 

@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Activity, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'staff'>('staff');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,11 +19,7 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    const roleToSend = role === 'admin' ? 'Administrator' : 'Healthcare Staff';
-
     try {
-      // --- THIS IS THE FIX ---
-      // Use the relative path to allow the Vite proxy to handle the request.
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -34,26 +28,24 @@ const Login = () => {
         body: JSON.stringify({
           email: email,
           password: password,
-          role: roleToSend,
         }),
       });
 
       if (response.ok) {
         const user = await response.json();
-        // This correctly stores the full user object from your backend
         localStorage.setItem('user', JSON.stringify(user));
         
         toast({
           title: "Login Successful",
-          description: `Welcome back, ${user.Name}!`, // Use user.Name as sent from backend
+          description: `Welcome back, ${user.Name}!`,
         });
         
-        navigate('/'); // Redirect to the dashboard
+        navigate('/');
       } else {
         const errorData = await response.json();
         toast({
           title: "Login Failed",
-          description: errorData.message || "Invalid email, password, or role combination.",
+          description: errorData.message || "Invalid email or password.",
           variant: "destructive",
         });
       }
@@ -121,19 +113,6 @@ const Login = () => {
                   )}
                 </Button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(value: 'admin' | 'staff') => setRole(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="staff">Healthcare Staff</SelectItem>
-                  <SelectItem value="admin">Administrator</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <Button 
