@@ -82,7 +82,7 @@ const Shipments = () => {
   const fetchShipments = async (userId: number, userRole: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/shipments/user-shipments', {
+      const response = await fetch('/api/shipments/user-shipments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userRole }),
@@ -104,15 +104,13 @@ const Shipments = () => {
     if (!user) return;
     
     try {
-        // Prepare the data payload for our new, more flexible endpoint
         const payload = {
             status: mapFrontendStatusToBackend(updatedShipment.status),
-            destination: updatedShipment.destinationAddress, // Send the updated address
+            Destination: updatedShipment.destinationAddress,
             estimatedDelivery: updatedShipment.estimatedDelivery,
         };
 
-        // Use the new general update route: PUT /api/shipments/:id
-        const response = await fetch(`http://localhost:3001/api/shipments/${updatedShipment.shipmentID}`, {
+        const response = await fetch(`/api/shipments/${updatedShipment.shipmentID}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -129,7 +127,6 @@ const Shipments = () => {
     }
   };
 
-  // --- (Modal handlers and filtering logic remain the same) ---
   const handleOpenTrackModal = (shipment: Shipment) => {
     setSelectedShipment(shipment);
     setTrackModalOpen(true);
@@ -162,7 +159,9 @@ const Shipments = () => {
   }
 
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    // --- THIS IS THE FIX ---
+    // The Layout component does not need userRole or userName as props.
+    <Layout>
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Shipments Management</h1>
         

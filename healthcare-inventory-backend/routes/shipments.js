@@ -40,7 +40,6 @@ router.post('/user-shipments', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    // The backend now accepts 'CurrentLocation' and 'Destination'
     const { status, Destination, CurrentLocation } = req.body;
 
     if (!status && !Destination && !CurrentLocation) {
@@ -68,24 +67,25 @@ router.put('/:id', async (req, res) => {
                 queryParts.push("CurrentLocation = @CurrentLocation");
                 request.input('CurrentLocation', sql.NVarChar, CurrentLocation);
             }
-            
+
             const updateShipmentQuery = `UPDATE Shipments SET ${queryParts.join(', ')} WHERE ShipmentID = @ShipmentID`;
             await request.query(updateShipmentQuery);
-            
+
             if (status) {
                 const orderResult = await new sql.Request(transaction).input('ShipmentID', sql.Int, id).query('SELECT OrderID FROM Shipments WHERE ShipmentID = @ShipmentID');
-                
+
                 if (orderResult.recordset.length > 0) {
                     const { OrderID } = orderResult.recordset[0];
                     let newOrderStatus = '';
 
-                    // Corrected logic: 'In Transit' now correctly maps to 'In Transit'
+                    // --- THIS IS THE FIX ---
+                    // When a shipment is 'in transit', the order is 'Dispatched'.
                     switch (status.toLowerCase()) {
                         case 'pending':
                             newOrderStatus = 'Dispatched';
                             break;
                         case 'in transit':
-                            newOrderStatus = 'In Transit'; // This was the bug
+                            newOrderStatus = 'Dispatched'; // Use the correct status for the order
                             break;
                         case 'delivered':
                             newOrderStatus = 'Delivered';
@@ -103,7 +103,7 @@ router.put('/:id', async (req, res) => {
             await transaction.commit();
             res.status(200).send({ message: `Shipment updated successfully.` });
 
-        } catch(err) {
+        } catch (err) {
             await transaction.rollback();
             throw err;
         }

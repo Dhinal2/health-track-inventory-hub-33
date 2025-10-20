@@ -74,7 +74,7 @@ export interface Invoice {
 }
 
 // --- Find and replace this line in src/types.ts ---
-export type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Delivered' | 'Awaiting Payment' | 'Pending Final Payment' | 'Received' | 'Completed' | 'Dispatched';
+export type OrderStatus = 'Pending' | 'Approved' | 'Rejected' | 'Delivered' | 'Awaiting Payment' | 'Pending Final Payment' | 'Received' | 'Completed' | 'Dispatched' | 'In transit';
 
 export interface OrderItem {
   OrderItemID: number;
