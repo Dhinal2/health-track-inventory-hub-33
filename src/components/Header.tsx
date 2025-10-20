@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Bell, Search, User, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Search, User, LogOut, Settings, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -33,13 +32,6 @@ export const Header: React.FC<HeaderProps> = ({ userName, userRole }) => {
   };
 
   const handleProfile = () => {
-    toast({
-      title: "Profile",
-      description: "Profile management coming soon!",
-    });
-  };
-
-  const handleSettings = () => {
     navigate('/settings');
   };
 
@@ -58,11 +50,7 @@ export const Header: React.FC<HeaderProps> = ({ userName, userRole }) => {
         </div>
 
         <div className="flex items-center space-x-4">
-          <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-
+          {/* Notification button has been removed */}
           <div className="flex items-center space-x-3 border-l border-gray-200 pl-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -83,12 +71,7 @@ export const Header: React.FC<HeaderProps> = ({ userName, userRole }) => {
                   <UserCircle className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                {userRole === 'admin' && (
-                  <DropdownMenuItem onClick={handleSettings}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
-                )}
+                {/* Separate Settings link for admin has been removed */}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
                   <LogOut className="mr-2 h-4 w-4" />
