@@ -55,20 +55,30 @@ router.post('/:id/pay', async (req, res) => {
         await transaction.begin();
 
         try {
-            const invoiceDetails = await new sql.Request(transaction).input('InvoiceID', sql.Int, id).query(`SELECT i.TotalAmount, i.OrderID, ISNULL((SELECT SUM(Amount) FROM Payments WHERE InvoiceID = @InvoiceID), 0) as TotalPaid FROM Invoices i WHERE i.InvoiceID = @InvoiceID`);
+            const invoiceDetails = await new sql.Request(transaction).input('InvoiceID', sql.Int, id).query(`SELECT i.TotalAmount, i.OrderID, i.PaymentStatus, ISNULL((SELECT SUM(Amount) FROM Payments WHERE InvoiceID = @InvoiceID), 0) as TotalPaid FROM Invoices i WHERE i.InvoiceID = @InvoiceID`);
             if (invoiceDetails.recordset.length === 0) {
                 await transaction.rollback();
                 return res.status(404).send({ message: 'Invoice not found.' });
             }
             
-            const { TotalAmount, OrderID, TotalPaid } = invoiceDetails.recordset[0];
-            const halfAmount = TotalAmount / 2;
+            const { TotalAmount, OrderID, TotalPaid, PaymentStatus } = invoiceDetails.recordset[0];
+            const amountRemaining = TotalAmount - TotalPaid;
 
-            if (parseFloat(amountPaid) < TotalAmount && TotalPaid == 0 && parseFloat(amountPaid) < halfAmount) {
-                await transaction.rollback();
-                return res.status(400).send({ message: `The first partial payment must be at least 50% of the total. Minimum payment: $${halfAmount.toFixed(2)}` });
+            // --- THIS IS THE FIX ---
+            // We add new validation logic for partially paid invoices.
+            if (PaymentStatus === 'Unpaid') {
+                const halfAmount = TotalAmount / 2;
+                if (parseFloat(amountPaid) < halfAmount && parseFloat(amountPaid) < TotalAmount) {
+                    await transaction.rollback();
+                    return res.status(400).send({ message: `The first payment must be at least 50% of the total, or the full amount. Minimum payment: $${halfAmount.toFixed(2)}` });
+                }
+            } else if (PaymentStatus === 'Partially Paid') {
+                if (parseFloat(amountPaid) < amountRemaining) {
+                    await transaction.rollback();
+                    return res.status(400).send({ message: `The final payment must cover the full remaining amount of $${amountRemaining.toFixed(2)}.` });
+                }
             }
-
+            
             await new sql.Request(transaction).input('InvoiceID', sql.Int, id).input('Amount', sql.Decimal(10, 2), amountPaid).input('PaymentMethod', sql.NVarChar, 'Credit Card').query('INSERT INTO Payments (InvoiceID, Amount, PaymentMethod) VALUES (@InvoiceID, @Amount, @PaymentMethod)');
             const newTotalPaid = TotalPaid + parseFloat(amountPaid);
             const newPaymentStatus = newTotalPaid >= TotalAmount ? 'Paid' : 'Partially Paid';

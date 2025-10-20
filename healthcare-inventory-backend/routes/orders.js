@@ -65,7 +65,7 @@ router.post('/', async (req, res) => {
             const orderId = orderResult.recordset[0].OrderID;
 
             for (const item of items) {
-                // --- THIS IS THE DEFINITIVE FIX ---
+                // --- THIS IS THE FINAL FIX ---
                 // The frontend's CreateOrderModal.tsx sends 'UnitPrice', so we must use 'item.UnitPrice' here.
                 await new sql.Request(transaction)
                     .input('OrderID', sql.Int, orderId)

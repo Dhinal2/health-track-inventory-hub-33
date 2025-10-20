@@ -40,9 +40,10 @@ router.post('/user-shipments', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { status, destination, estimatedDelivery } = req.body;
+    // The backend now accepts 'CurrentLocation' and 'Destination'
+    const { status, Destination, CurrentLocation } = req.body;
 
-    if (!status && !destination && !estimatedDelivery) {
+    if (!status && !Destination && !CurrentLocation) {
         return res.status(400).send({ message: 'No update information provided.' });
     }
 
@@ -59,13 +60,13 @@ router.put('/:id', async (req, res) => {
                 queryParts.push("Status = @Status");
                 request.input('Status', sql.NVarChar, status);
             }
-            if (destination) {
+            if (Destination) {
                 queryParts.push("Destination = @Destination");
-                request.input('Destination', sql.NVarChar, destination);
+                request.input('Destination', sql.NVarChar, Destination);
             }
-            if (estimatedDelivery) {
-                queryParts.push("EstimatedDelivery = @EstimatedDelivery");
-                request.input('EstimatedDelivery', sql.Date, estimatedDelivery);
+            if (CurrentLocation) {
+                queryParts.push("CurrentLocation = @CurrentLocation");
+                request.input('CurrentLocation', sql.NVarChar, CurrentLocation);
             }
             
             const updateShipmentQuery = `UPDATE Shipments SET ${queryParts.join(', ')} WHERE ShipmentID = @ShipmentID`;
@@ -78,14 +79,15 @@ router.put('/:id', async (req, res) => {
                     const { OrderID } = orderResult.recordset[0];
                     let newOrderStatus = '';
 
-                    switch (status) {
-                        case 'Pending':
+                    // Corrected logic: 'In Transit' now correctly maps to 'In Transit'
+                    switch (status.toLowerCase()) {
+                        case 'pending':
                             newOrderStatus = 'Dispatched';
                             break;
-                        case 'In Transit':
-                            newOrderStatus = 'Dispatched';
+                        case 'in transit':
+                            newOrderStatus = 'In Transit'; // This was the bug
                             break;
-                        case 'Delivered':
+                        case 'delivered':
                             newOrderStatus = 'Delivered';
                             break;
                     }

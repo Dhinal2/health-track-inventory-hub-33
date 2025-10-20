@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import { InventoryItem } from '../pages/Inventory';
@@ -16,11 +15,12 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   onClose,
   onSave
 }) => {
+  // The state correctly uses PascalCase to match the InventoryItem type
   const [formData, setFormData] = useState<Partial<InventoryItem>>({
-    name: '',
-    stockQuantity: 0,
-    reorderThreshold: 0,
-    autoReorder: false
+    Name: '',
+    StockQuantity: 0,
+    ReorderThreshold: 0,
+    AutoReorder: false
   });
 
   useEffect(() => {
@@ -28,10 +28,10 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setFormData(item);
     } else {
       setFormData({
-        name: '',
-        stockQuantity: 0,
-        reorderThreshold: 0,
-        autoReorder: false
+        Name: '',
+        StockQuantity: 0,
+        ReorderThreshold: 0,
+        AutoReorder: false
       });
     }
   }, [item]);
@@ -39,12 +39,18 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // --- THIS IS THE FIX ---
+    // We now construct a complete InventoryItem object by spreading the original item's properties
+    // and then overwriting them with the updated form data.
     const itemToSave: InventoryItem = {
-      id: item?.id || Date.now(),
-      name: formData.name || '',
-      stockQuantity: formData.stockQuantity || 0,
-      reorderThreshold: formData.reorderThreshold || 0,
-      autoReorder: formData.autoReorder || false
+      ...(item!), // Copies all original properties like id, ProductID, Price, etc.
+      Name: formData.Name || '',
+      StockQuantity: formData.StockQuantity || 0,
+      ReorderThreshold: formData.ReorderThreshold || 0,
+      AutoReorder: formData.AutoReorder || false,
+      // Ensure lowercase versions are also present if the type requires them
+      id: item?.id || 0,
+      name: formData.Name || '',
     };
     
     onSave(itemToSave);
@@ -56,7 +62,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       ...prev,
       [name]: type === 'checkbox' 
         ? (e.target as HTMLInputElement).checked
-        : name === 'stockQuantity' || name === 'reorderThreshold'
+        : name === 'StockQuantity' || name === 'ReorderThreshold'
         ? parseFloat(value) || 0 
         : value
     }));
@@ -87,8 +93,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               </label>
               <input
                 type="text"
-                name="name"
-                value={formData.name}
+                name="Name"
+                value={formData.Name}
                 onChange={handleChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -101,8 +107,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               </label>
               <input
                 type="number"
-                name="stockQuantity"
-                value={formData.stockQuantity}
+                name="StockQuantity"
+                value={formData.StockQuantity}
                 onChange={handleChange}
                 required
                 min="0"
@@ -116,8 +122,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               </label>
               <input
                 type="number"
-                name="reorderThreshold"
-                value={formData.reorderThreshold}
+                name="ReorderThreshold"
+                value={formData.ReorderThreshold}
                 onChange={handleChange}
                 required
                 min="0"
@@ -128,8 +134,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
             <div className="flex items-center">
               <input
                 type="checkbox"
-                name="autoReorder"
-                checked={formData.autoReorder}
+                name="AutoReorder"
+                checked={formData.AutoReorder}
                 onChange={handleChange}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />

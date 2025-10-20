@@ -32,7 +32,6 @@ const Products = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- Fetch user from localStorage (same as your working logic)
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -50,11 +49,11 @@ const Products = () => {
     fetchProducts();
   }, []);
 
-  // --- Fetch products from backend
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/products');
+      // --- FIX: Use relative proxy path ---
+      const response = await fetch('/api/products');
       if (response.ok) {
         setProducts(await response.json());
       } else {
@@ -71,7 +70,6 @@ const Products = () => {
     }
   };
 
-  // --- States for modals/forms ---
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [formData, setFormData] = useState({ quantity: 1 });
@@ -87,7 +85,6 @@ const Products = () => {
 
   const [deleteProductId, setDeleteProductId] = useState<number | null>(null);
 
-  // --- Request Handling ---
   const handleRequest = (product: Product) => {
     setSelectedProduct(product);
     setFormData({ quantity: 1 });
@@ -99,15 +96,17 @@ const Products = () => {
     const orderItem = {
       ProductID: selectedProduct.ProductID,
       Quantity: formData.quantity,
-      Price: selectedProduct.Price,
+      // --- THIS IS THE FIX ---
+      UnitPrice: selectedProduct.Price, // Correctly use UnitPrice
     };
     const orderData = {
       userId: user.id,
       items: [orderItem],
-      totalAmount: orderItem.Quantity * orderItem.Price,
+      totalAmount: orderItem.Quantity * orderItem.UnitPrice,
     };
     try {
-      const response = await fetch('http://localhost:3001/api/orders', {
+      // --- FIX: Use relative proxy path ---
+      const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData),
@@ -121,7 +120,6 @@ const Products = () => {
     }
   };
 
-  // --- Add/Edit Product ---
   const handleAddNew = () => {
     setEditingProduct(null);
     setProductFormData({ Name: '', Price: 0, Description: '', StockQuantity: 0 });
@@ -140,9 +138,10 @@ const Products = () => {
   };
 
   const handleSaveProduct = async () => {
+    // --- FIX: Use relative proxy path ---
     const url = editingProduct
-      ? `http://localhost:3001/api/products/${editingProduct.ProductID}`
-      : 'http://localhost:3001/api/products';
+      ? `/api/products/${editingProduct.ProductID}`
+      : '/api/products';
     const method = editingProduct ? 'PUT' : 'POST';
 
     try {
@@ -168,11 +167,11 @@ const Products = () => {
     }
   };
 
-  // --- Delete Product ---
   const confirmDelete = async () => {
     if (!deleteProductId) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/products/${deleteProductId}`, {
+      // --- FIX: Use relative proxy path ---
+      const response = await fetch(`/api/products/${deleteProductId}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -194,18 +193,18 @@ const Products = () => {
     setProductFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // --- Loading state ---
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-blue-600"></div>
-      </div>
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-blue-600"></div>
+        </div>
+      </Layout>
     );
   }
 
-  // --- Main UI ---
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Products Catalog</h1>
@@ -245,18 +244,10 @@ const Products = () => {
                       )}
                       {user.role === 'admin' && (
                         <div className="flex justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(product)}
-                          >
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => setDeleteProductId(product.ProductID)}
-                          >
+                          <Button variant="destructive" size="sm" onClick={() => setDeleteProductId(product.ProductID)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -269,7 +260,7 @@ const Products = () => {
           </div>
         </div>
 
-        {/* ✅ Request Modal */}
+        {/* Request Modal */}
         <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -315,7 +306,7 @@ const Products = () => {
           </DialogContent>
         </Dialog>
 
-        {/* ✅ Add/Edit Modal */}
+        {/* Add/Edit Modal */}
         <Dialog open={isAddEditModalOpen} onOpenChange={setIsAddEditModalOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -370,7 +361,7 @@ const Products = () => {
           </DialogContent>
         </Dialog>
 
-        {/* ✅ Delete Confirmation */}
+        {/* Delete Confirmation */}
         <AlertDialog open={deleteProductId !== null} onOpenChange={() => setDeleteProductId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>

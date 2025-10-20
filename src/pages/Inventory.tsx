@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { InventoryTable } from '../components/InventoryTable';
 import { InventoryFilters } from '../components/InventoryFilters';
 import { ReorderModal } from '../components/ReorderModal';
 import { ConfigurationModal } from '../components/ConfigurationModal';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, QrCode } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { UseInventoryModal } from '@/components/UseInventoryModal';
 
+// This is the single source of truth for the InventoryItem type
 export interface InventoryItem {
   InventoryID: number;
   ProductID: number;
@@ -17,8 +20,8 @@ export interface InventoryItem {
   StockQuantity: number;
   ReorderThreshold: number;
   AutoReorder: boolean;
-  id: number;
-  name: string;
+  id: number; // For compatibility
+  name: string; // For compatibility
 }
 
 const Inventory = () => {
@@ -30,6 +33,8 @@ const Inventory = () => {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isUseModalOpen, setIsUseModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -48,20 +53,24 @@ const Inventory = () => {
           fetchInventory(currentUser.id, currentUser.rawRole);
         } else {
           setIsLoading(false);
+          navigate('/login');
         }
       } catch (error) {
         console.error("Failed to parse user data:", error);
         setIsLoading(false);
+        navigate('/login');
       }
     } else {
       setIsLoading(false);
+      navigate('/login');
     }
-  }, []);
+  }, [navigate]);
 
   const fetchInventory = async (userId: number, userRole: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/inventory/user-inventory', {
+      // --- FIX: Use the relative proxy URL ---
+      const response = await fetch('/api/inventory/user-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userRole })
@@ -90,16 +99,14 @@ const Inventory = () => {
   };
   
   const handleConfigure = (item: InventoryItem) => {
-    if (user?.role === 'staff') {
-      setSelectedItem(item);
-      setIsConfigModalOpen(true);
-    }
+    setSelectedItem(item);
+    setIsConfigModalOpen(true);
   };
 
   const handleConfigSave = async (updatedItem: InventoryItem) => {
     if (!user) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/inventory/${updatedItem.InventoryID}`, {
+      const response = await fetch(`/api/inventory/${updatedItem.InventoryID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,11 +142,11 @@ const Inventory = () => {
     if (!user) return;
     const orderData = {
       userId: user.id,
-      items: [{ ProductID: item.ProductID, Quantity: quantity, Price: item.Price || 0 }],
+      items: [{ ProductID: item.ProductID, Quantity: quantity, UnitPrice: item.Price || 0 }],
       totalAmount: quantity * (item.Price || 0)
     };
     try {
-      const response = await fetch('http://localhost:3001/api/orders', {
+      const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData)
@@ -154,42 +161,105 @@ const Inventory = () => {
     }
   };
 
-  if (isLoading || !user) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div></div>;
+  const handleConfirmUse = (inventoryId: number, quantityUsed: number) => {
+    if (!user) return;
+
+    fetch('/api/inventory/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inventoryId, quantityUsed, userId: user.id }),
+    })
+    .then(async res => {
+      if (res.ok) {
+        toast({ title: "Success", description: "Inventory stock has been updated." });
+        // --- FIX: Use the correct state variable 'inventoryItems' ---
+        const updatedInventory = inventoryItems.map(item => 
+          item.InventoryID === inventoryId 
+            ? { ...item, StockQuantity: item.StockQuantity - quantityUsed }
+            : item
+        );
+        // --- FIX: Use the correct state setters ---
+        setInventoryItems(updatedInventory);
+        setFilteredItems(updatedInventory); // Also update the filtered list
+        setIsUseModalOpen(false);
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to update inventory');
+      }
+    })
+    .catch(error => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    });
+  };
+  
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  if (!user) {
+    return null; // Or a message telling the user they need to log in
   }
   
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    // --- FIX: Remove the incorrect props from Layout ---
+    <Layout>
+      <UseInventoryModal 
+        isOpen={isUseModalOpen}
+        onClose={() => setIsUseModalOpen(false)}
+        onConfirm={handleConfirmUse}
+        inventoryList={inventoryItems}
+      />
+      {isReorderModalOpen && (
+        <ReorderModal
+          item={selectedItem}
+          isOpen={isReorderModalOpen}
+          onClose={() => setIsReorderModalOpen(false)}
+          onReorderSubmit={handleReorderSubmit}
+        />
+      )}
+      {isConfigModalOpen && (
+        <ConfigurationModal
+          item={selectedItem}
+          isOpen={isConfigModalOpen}
+          onClose={() => setIsConfigModalOpen(false)}
+          onSave={handleConfigSave}
+        />
+      )}
+
+      {/* --- FIX: Correct the JSX structure by removing one outer div --- */}
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
-          <Button onClick={() => toast({ title: 'Exporting...', description: 'Feature coming soon.' })} variant="outline">
-            <Download className="w-4 h-4 mr-2" /> Export
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
+            <p className="text-muted-foreground mt-2">
+              Track and manage your personal or department's medical supply stock.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setIsUseModalOpen(true)} className="flex items-center gap-2">
+              <QrCode className="h-4 w-4" />
+              Use Inventory
+            </Button>
+            <Button onClick={() => toast({ title: 'Exporting...', description: 'Feature coming soon.' })} variant="outline">
+              <Download className="w-4 h-4 mr-2" /> Export
+            </Button>
+          </div>
         </div>
+
         <InventoryFilters onFilter={handleFilter} />
+        
         <InventoryTable
           items={filteredItems}
           userRole={user.role}
           onReorder={handleReorder}
           onConfigure={handleConfigure}
         />
-        {isReorderModalOpen && (
-          <ReorderModal
-            item={selectedItem}
-            isOpen={isReorderModalOpen}
-            onClose={() => setIsReorderModalOpen(false)}
-            onReorderSubmit={handleReorderSubmit}
-          />
-        )}
-        {isConfigModalOpen && (
-          <ConfigurationModal
-            item={selectedItem}
-            isOpen={isConfigModalOpen}
-            onClose={() => setIsConfigModalOpen(false)}
-            onSave={handleConfigSave}
-          />
-        )}
       </div>
     </Layout>
   );

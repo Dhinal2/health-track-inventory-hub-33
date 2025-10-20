@@ -51,4 +51,55 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// POST /api/inventory/use - Reduce stock for a specific inventory item
+router.post('/use', async (req, res) => {
+    const { inventoryId, quantityUsed, userId } = req.body;
+
+    if (!inventoryId || !quantityUsed || !userId || quantityUsed <= 0) {
+        return res.status(400).json({ message: 'Valid Inventory ID, User ID, and a positive quantity are required.' });
+    }
+
+    try {
+        const pool = await poolPromise;
+        const transaction = pool.transaction();
+        await transaction.begin();
+
+        try {
+            // First, get the current stock to ensure we don't go below zero
+            const inventoryResult = await new sql.Request(transaction)
+                .input('InventoryID', sql.Int, inventoryId)
+                .input('UserID', sql.Int, userId)
+                .query('SELECT StockQuantity FROM Inventory WHERE InventoryID = @InventoryID AND UserID = @UserID');
+
+            if (inventoryResult.recordset.length === 0) {
+                await transaction.rollback();
+                return res.status(404).json({ message: 'Inventory item not found for this user.' });
+            }
+
+            const currentStock = inventoryResult.recordset[0].StockQuantity;
+
+            if (currentStock < quantityUsed) {
+                await transaction.rollback();
+                return res.status(400).json({ message: `Cannot use ${quantityUsed} items. Only ${currentStock} available.` });
+            }
+
+            // If stock is sufficient, update the quantity
+            await new sql.Request(transaction)
+                .input('InventoryID', sql.Int, inventoryId)
+                .input('QuantityUsed', sql.Int, quantityUsed)
+                .query('UPDATE Inventory SET StockQuantity = StockQuantity - @QuantityUsed WHERE InventoryID = @InventoryID');
+
+            await transaction.commit();
+            res.status(200).json({ message: 'Inventory updated successfully.' });
+
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
+        }
+    } catch (err) {
+        console.error('Error using inventory item:', err);
+        res.status(500).send({ message: 'Server error while updating inventory.' });
+    }
+});
+
 module.exports = router;
