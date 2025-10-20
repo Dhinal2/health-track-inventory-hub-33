@@ -64,8 +64,6 @@ router.post('/:id/pay', async (req, res) => {
             const { TotalAmount, OrderID, TotalPaid, PaymentStatus } = invoiceDetails.recordset[0];
             const amountRemaining = TotalAmount - TotalPaid;
 
-            // --- THIS IS THE FIX ---
-            // We add new validation logic for partially paid invoices.
             if (PaymentStatus === 'Unpaid') {
                 const halfAmount = TotalAmount / 2;
                 if (parseFloat(amountPaid) < halfAmount && parseFloat(amountPaid) < TotalAmount) {
@@ -190,6 +188,61 @@ router.get('/payment-details/:orderId', async (req, res) => {
     } catch (error) {
         console.error('Error fetching payment details:', error);
         res.status(500).send({ message: 'Server error while fetching payment details.' });
+    }
+});
+
+// GET /api/invoices/:id - Get all details for a single invoice
+router.get('/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const pool = await poolPromise;
+        const request = pool.request().input('InvoiceID', sql.Int, id);
+
+        const invoiceResult = await request.query(`
+            SELECT 
+                i.*, 
+                u.Name as CustomerName, 
+                u.Email as CustomerEmail,
+                u.ContactNumber as CustomerContact,
+                '' as CustomerAddress 
+            FROM Invoices i
+            JOIN Orders o ON i.OrderID = o.OrderID
+            JOIN Users u ON o.UserID = u.UserID
+            WHERE i.InvoiceID = @InvoiceID;
+        `);
+
+        if (invoiceResult.recordset.length === 0) {
+            return res.status(404).send({ message: 'Invoice not found.' });
+        }
+
+        const orderId = invoiceResult.recordset[0].OrderID;
+        const itemsResult = await pool.request().input('OrderID', sql.Int, orderId).query(`
+            SELECT p.ProductID, p.Name as ProductName, oi.Quantity, oi.UnitPrice
+            FROM OrderItems oi
+            JOIN Products p ON oi.ProductID = p.ProductID
+            WHERE oi.OrderID = @OrderID;
+        `);
+
+        const paymentsResult = await request.query(`
+            SELECT PaymentID, Amount, PaymentDate, PaymentMethod
+            FROM Payments
+            WHERE InvoiceID = @InvoiceID
+            ORDER BY PaymentDate DESC;
+        `);
+        const paymentHistory = paymentsResult.recordset;
+
+        const invoiceDetails = {
+            ...invoiceResult.recordset[0],
+            Items: itemsResult.recordset,
+            PaymentHistory: paymentHistory
+        };
+
+        res.json(invoiceDetails);
+
+    } catch (error) {
+        console.error(`Error fetching details for invoice #${id}:`, error);
+        res.status(500).send({ message: 'Server error while fetching invoice details.' });
     }
 });
 

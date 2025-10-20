@@ -1,6 +1,4 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -9,100 +7,199 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, CreditCard, Download, MoreHorizontal } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Invoice, FrontendPaymentStatus } from '@/types';
+import { Eye, Download, MoreHorizontal, CheckCircle, Clock, AlertCircle, CreditCard } from 'lucide-react';
+import { format } from 'date-fns';
+import { Invoice, FrontendPaymentStatus as PaymentStatus } from '@/types';
 
 interface InvoicesTableProps {
   invoices: Invoice[];
   userRole: 'admin' | 'staff';
+  onPaymentStatusUpdate: (invoiceId: string, newStatus: PaymentStatus) => void;
   onViewDetails: (invoice: Invoice) => void;
-  onPayNow: (invoice: Invoice) => void;
   onDownloadPDF: (invoice: Invoice) => void;
-  onPaymentStatusUpdate: (invoiceId: string, newStatus: FrontendPaymentStatus) => void;
-  getPaymentStatusBadgeVariant: (status: FrontendPaymentStatus) => 'default' | 'destructive' | 'secondary';
+  onPayNow: (invoice: Invoice) => void;
+  getPaymentStatusBadgeVariant: (status: PaymentStatus) => string;
 }
 
 export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   invoices,
   userRole,
-  onViewDetails,
-  onPayNow,
-  onDownloadPDF,
   onPaymentStatusUpdate,
-  getPaymentStatusBadgeVariant
+  onViewDetails,
+  onDownloadPDF,
+  onPayNow,
+  getPaymentStatusBadgeVariant,
 }) => {
-  const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(invoices.length / itemsPerPage);
+  
+  const paginatedInvoices = invoices.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const getStatusIcon = (status: PaymentStatus) => {
+    switch (status) {
+      case 'paid':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'unpaid':
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'partially_paid':
+        return <Clock className="w-4 h-4 text-blue-500" />;
+      case 'overdue':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const formatPaymentStatus = (status: PaymentStatus) => {
+    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
 
   return (
-    <div className="rounded-md border bg-white shadow-sm">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-gray-50">
-            <TableHead>Invoice ID</TableHead>
-            <TableHead>Order ID</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Total</TableHead>
-            <TableHead>Issued</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {invoices.map((invoice) => (
-            <TableRow key={invoice.id}>
-              <TableCell className="font-medium">{invoice.id}</TableCell>
-              <TableCell>{invoice.orderId}</TableCell>
-              <TableCell>{invoice.customerName}</TableCell>
-              <TableCell>
-                <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus)}>
-                  {invoice.paymentStatus.replace('_', ' ')}
-                </Badge>
-              </TableCell>
-              <TableCell>{formatCurrency(invoice.grandTotal)}</TableCell>
-              <TableCell>{formatDate(invoice.issueDate)}</TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => onViewDetails(invoice)}>
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  {userRole === 'staff' && (invoice.paymentStatus === 'unpaid' || invoice.paymentStatus === 'partially_paid') && (
-                    <Button variant="default" size="sm" onClick={() => onPayNow(invoice)}>
-                        <CreditCard className="w-4 h-4 mr-2" /> Pay
-                    </Button>
-                  )}
-                   <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                           <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onDownloadPDF(invoice)}>
-                           <Download className="w-4 h-4 mr-2" /> Download PDF
-                        </DropdownMenuItem>
-                        {userRole === 'admin' && invoice.paymentStatus !== 'paid' && (
-                            <DropdownMenuItem onClick={() => onPaymentStatusUpdate(invoice.id, 'paid')}>
-                                Mark as Paid
-                            </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                   </DropdownMenu>
-                </div>
-              </TableCell>
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Invoice ID</TableHead>
+              <TableHead>Order ID</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Outstanding</TableHead>
+              <TableHead>Payment Status</TableHead>
+              <TableHead>Date Issued</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-       {invoices.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-lg">No invoices found.</p>
+          </TableHeader>
+          <TableBody>
+            {paginatedInvoices.map((invoice) => (
+              <TableRow
+                key={invoice.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onViewDetails(invoice)}
+              >
+                <TableCell className="font-medium text-blue-600">{invoice.id}</TableCell>
+                <TableCell>{invoice.orderId}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{invoice.customerName}</div>
+                </TableCell>
+                <TableCell className="font-medium">${invoice.grandTotal.toFixed(2)}</TableCell>
+                <TableCell>
+                  {invoice.paymentStatus === 'paid' ? (
+                    <span className="text-muted-foreground">$0.00</span>
+                  ) : (
+                    <span className="font-medium text-foreground">
+                      ${(invoice.outstandingBalance ?? (invoice.grandTotal - (invoice.amountPaid || 0))).toFixed(2)}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(invoice.paymentStatus)}
+                    <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus) as any}>
+                      {formatPaymentStatus(invoice.paymentStatus)}
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>{format(new Date(invoice.issueDate), 'MMM dd, yyyy')}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end space-x-1">
+                    {userRole === 'staff' && invoice.paymentStatus !== 'paid' && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); onPayNow(invoice); }}
+                      >
+                        <CreditCard className="w-4 h-4 mr-2" /> Pay
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={(e) => { e.stopPropagation(); onViewDetails(invoice); }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={(e) => { e.stopPropagation(); onDownloadPDF(invoice); }}
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                    {userRole === 'admin' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'paid'); }}
+                            disabled={invoice.paymentStatus === 'paid'}
+                          >Mark as Paid</DropdownMenuItem>
+                           <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'partially_paid'); }}
+                             disabled={invoice.paymentStatus === 'paid'}
+                           >Mark as Partially Paid</DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'overdue'); }}
+                            disabled={invoice.paymentStatus === 'paid'}
+                          >Mark as Overdue</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {invoices.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+                <p>No invoices found.</p>
+            </div>
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-500">
+            Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
+            {Math.min(currentPage * itemsPerPage, invoices.length)} of {invoices.length} invoices
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >Previous</Button>
+             <div className="flex items-center space-x-1">
+               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                 <Button
+                   key={page}
+                   variant={currentPage === page ? "default" : "outline"}
+                   size="sm"
+                   onClick={() => setCurrentPage(page)}
+                   className="w-8"
+                 >{page}</Button>
+               ))}
+             </div>
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >Next</Button>
+          </div>
         </div>
       )}
     </div>
