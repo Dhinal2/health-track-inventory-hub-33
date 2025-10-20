@@ -3,93 +3,159 @@ import { StatsCard } from './StatsCard';
 import { InventoryChart } from './InventoryChart';
 import { RecentOrders } from './RecentOrders';
 import { LowStockAlerts } from './LowStockAlerts';
-import { Package2, AlertTriangle, ShoppingCart, DollarSign } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from './ui/skeleton';
+import { Package2, AlertTriangle, ShoppingCart, DollarSign, LucideIcon } from 'lucide-react';
 
-export const Dashboard = () => {
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    lowStockCount: 0,
-    ordersToday: 0,
-    totalRevenue: 0,
-  });
+const iconMap: { [key: string]: LucideIcon } = {
+    Package2,
+    AlertTriangle,
+    ShoppingCart,
+    DollarSign,
+};
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/api/dashboard/stats');
-        if (response.ok) {
-          const data = await response.json();
-          setStats(data);
+interface User {
+    id: number;
+    name: string;
+    role: 'admin' | 'staff';
+    rawRole: string;
+}
+
+interface StatData {
+    title: string;
+    value: string | number;
+    icon: string;
+    color: string;
+    change?: string;
+    changeType?: 'positive' | 'negative' | 'neutral';
+}
+
+interface DashboardApiResponse {
+    stats: StatData[];
+    recentOrders: any[];
+    lowStockAlerts: any[];
+    weeklyUsage: any[];
+}
+
+
+export const Dashboard: React.FC = () => {
+    const [user, setUser] = useState<User | null>(null);
+    const [data, setData] = useState<DashboardApiResponse | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        const userData = localStorage.getItem('user');
+        if (userData) {
+            const parsedUser = JSON.parse(userData);
+            const currentUser: User = {
+                id: parsedUser.UserID,
+                name: parsedUser.Name,
+                role: parsedUser.Role === 'Administrator' ? 'admin' : 'staff',
+                rawRole: parsedUser.Role
+            };
+            setUser(currentUser);
+
+            fetch('/api/dashboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.rawRole }),
+            })
+            .then(res => res.json())
+            .then(dashboardData => {
+                setData(dashboardData);
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error("Failed to fetch dashboard data:", err);
+                toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
+                setIsLoading(false);
+            });
         } else {
-          console.error('Failed to fetch dashboard stats');
+            setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
-      }
+    }, [toast]);
+
+    const handleReorderAll = async () => {
+        if (!user) return;
+
+        toast({ title: "Submitting...", description: "Creating a bulk reorder for all critical items." });
+        
+        try {
+            const response = await fetch('/api/orders/reorder-all-low-stock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to create reorder.');
+            }
+            
+            toast({
+                title: "Success!",
+                description: result.message,
+            });
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message || "Could not submit reorder request.",
+                variant: "destructive",
+            });
+        }
     };
-
-    fetchStats();
-  }, []);
-
-  const statsData = [
-    {
-      title: 'Total Products',
-      value: stats.totalProducts.toLocaleString(),
-      change: '',
-      changeType: 'positive' as const,
-      icon: Package2,
-      color: 'blue' as const
-    },
-    {
-      title: 'Low Stock Items',
-      value: stats.lowStockCount.toLocaleString(),
-      change: '',
-      changeType: 'negative' as const,
-      icon: AlertTriangle,
-      color: 'red' as const
-    },
-    {
-      title: 'Orders Today',
-      value: stats.ordersToday.toLocaleString(),
-      change: '',
-      changeType: 'positive' as const,
-      icon: ShoppingCart,
-      color: 'green' as const
-    },
-    {
-      title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString()}`,
-      change: '',
-      changeType: 'positive' as const,
-      icon: DollarSign,
-      color: 'purple' as const
+    
+    if (isLoading) {
+        return (
+            <div className="space-y-6">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <Skeleton className="h-28" />
+                    <Skeleton className="h-28" />
+                    <Skeleton className="h-28" />
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                    <Skeleton className="h-96" />
+                    <Skeleton className="h-96" />
+                </div>
+            </div>
+        );
     }
-  ];
+    
+    if (!user || !data) {
+        return <div className="text-center text-muted-foreground">Could not load dashboard data. Please try again later.</div>;
+    }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
-        <div className="text-sm text-gray-500">
-          Last updated: {new Date().toLocaleString()}
+    return (
+        <div className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                {data.stats.map((stat) => {
+                    const IconComponent = iconMap[stat.icon] || Package2;
+                    return (
+                        <StatsCard
+                            key={stat.title}
+                            title={stat.title}
+                            value={String(stat.value)}
+                            icon={IconComponent}
+                            color={stat.color as any}
+                            change={stat.change || ''}
+                            changeType={stat.changeType || 'neutral'}
+                        />
+                    );
+                })}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1"><InventoryChart data={data.weeklyUsage} /></div>
+                <div className="lg:col-span-2"><RecentOrders orders={data.recentOrders} userRole={user.role} /></div>
+            </div>
+
+            <LowStockAlerts 
+                items={data.lowStockAlerts} 
+                userRole={user.role} 
+                onReorderAll={handleReorderAll}
+             />
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsData.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
-        ))}
-      </div>
-
-      {/* Charts and Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <InventoryChart />
-        <RecentOrders />
-      </div>
-
-      {/* Low Stock Alerts */}
-      <LowStockAlerts />
-    </div>
-  );
+    );
 };

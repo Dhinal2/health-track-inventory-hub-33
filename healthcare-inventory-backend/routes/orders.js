@@ -138,4 +138,68 @@ router.put('/:id/status', async (req, res) => {
     }
 });
 
+router.post('/reorder-all-low-stock', async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) {
+        return res.status(400).send({ message: 'User ID is required.' });
+    }
+
+    const pool = await poolPromise;
+    const transaction = new sql.Transaction(pool);
+
+    try {
+        await transaction.begin();
+        const request = new sql.Request(transaction);
+
+        // 1. Find all low-stock items and calculate the quantity needed to restock.
+        const lowStockItems = await request.query(`
+            SELECT 
+                i.ProductID,
+                p.Price,
+                (i.ReorderThreshold - i.StockQuantity) as QuantityToOrder
+            FROM Inventory i
+            JOIN Products p ON i.ProductID = p.ProductID
+            WHERE i.StockQuantity < i.ReorderThreshold AND (i.ReorderThreshold - i.StockQuantity) > 0;
+        `);
+
+        if (lowStockItems.recordset.length === 0) {
+            await transaction.rollback();
+            return res.status(200).send({ message: 'No items require reordering.' });
+        }
+
+        // 2. Calculate the total amount for the new order.
+        const totalAmount = lowStockItems.recordset.reduce((sum, item) => {
+            return sum + (item.QuantityToOrder * item.Price);
+        }, 0);
+
+        // 3. Create a new order.
+        const orderResult = await request
+            .input('UserID', sql.Int, userId)
+            .input('TotalAmount', sql.Decimal(10, 2), totalAmount)
+            .query('INSERT INTO Orders (UserID, TotalAmount, Status) OUTPUT INSERTED.OrderID VALUES (@UserID, @TotalAmount, \'Pending\');');
+        
+        const newOrderId = orderResult.recordset[0].OrderID;
+
+        // 4. Add each low-stock item to the new order.
+        for (const item of lowStockItems.recordset) {
+            const itemRequest = new sql.Request(transaction);
+            await itemRequest
+                .input('OrderID', sql.Int, newOrderId)
+                .input('ProductID', sql.Int, item.ProductID)
+                .input('Quantity', sql.Int, item.QuantityToOrder)
+                .input('UnitPrice', sql.Decimal(10, 2), item.Price)
+                .query('INSERT INTO OrderItems (OrderID, ProductID, Quantity, UnitPrice) VALUES (@OrderID, @ProductID, @Quantity, @UnitPrice);');
+        }
+
+        await transaction.commit();
+        res.status(201).json({ message: `Successfully created reorder #${newOrderId} for ${lowStockItems.recordset.length} items.`, orderId: newOrderId });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error("Error creating bulk reorder:", error);
+        res.status(500).send({ message: 'Server error during bulk reorder.' });
+    }
+});
+
+
 module.exports = router;

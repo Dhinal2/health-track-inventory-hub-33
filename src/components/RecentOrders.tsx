@@ -1,85 +1,122 @@
-
 import React from 'react';
-import { Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'; // Keep Card for overall structure consistency
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Keep Avatar
+import { Clock, CheckCircle, AlertCircle, XCircle, Truck, Check } from 'lucide-react'; // Import relevant icons
+import { useNavigate } from 'react-router-dom'; // Import useNavigate for the button
 
-export const RecentOrders: React.FC = () => {
-  const recentOrders = [
-    {
-      id: 'ORD-2024-001',
-      supplier: 'MedSupply Co.',
-      items: 15,
-      amount: '$2,450.00',
-      status: 'pending',
-      date: '2024-01-15'
-    },
-    {
-      id: 'ORD-2024-002',
-      supplier: 'Healthcare Plus',
-      items: 8,
-      amount: '$1,230.00',
-      status: 'fulfilled',
-      date: '2024-01-14'
-    },
-    {
-      id: 'ORD-2024-003',
-      supplier: 'Medical Depot',
-      items: 22,
-      amount: '$3,890.00',
-      status: 'pending',
-      date: '2024-01-13'
-    }
-  ];
+interface RecentOrdersProps {
+  orders: any[];
+  userRole: 'admin' | 'staff';
+}
 
+export const RecentOrders: React.FC<RecentOrdersProps> = ({ orders = [], userRole }) => { // Default orders to []
+  const navigate = useNavigate();
+
+  // --- THIS IS THE FIX ---
+  // Updated getStatusIcon to match backend statuses and use relevant icons
   const getStatusIcon = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'fulfilled':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <Clock className="w-4 h-4 text-yellow-500 flex-shrink-0" />;
+      case 'approved':
+        return <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />; // Simple check for approved
+      case 'dispatched':
+        return <Truck className="w-4 h-4 text-indigo-500 flex-shrink-0" />;
+      case 'delivered':
+        return <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />;
+      case 'rejected':
+        return <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />;
       default:
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
+        return <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0" />;
     }
   };
 
+  // --- THIS IS THE FIX ---
+  // Updated getStatusColor to match backend statuses and desired UI
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
-      case 'fulfilled':
+      case 'approved':
+         return 'bg-blue-100 text-blue-800';
+      case 'dispatched':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'delivered':
         return 'bg-green-100 text-green-800';
+      case 'rejected':
+         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-red-100 text-red-800';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
+  const getInitials = (name: string = '') => name.split(' ').map(n => n[0]).join('').toUpperCase();
+
+  const validOrders = orders || []; // Ensure orders is always an array
+
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+    // --- THIS IS THE FIX ---
+    // Using the div structure from your snippet inside the Card structure
+    <Card className="h-full shadow-sm border border-gray-200 rounded-lg flex flex-col">
+      <CardHeader className="border-b border-gray-100 px-6 py-4 flex flex-row items-center justify-between"> {/* Use flex layout */}
+        <div>
+          <CardTitle className="text-lg font-semibold text-gray-800">Recent Orders</CardTitle>
+          <CardDescription className="text-sm text-gray-500">Overview of the latest order activities.</CardDescription>
+        </div>
+        {/* Added View All button */}
+        <button
+          onClick={() => navigate('/orders')}
+          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+        >
           View All
         </button>
-      </div>
-
-      <div className="space-y-3">
-        {recentOrders.map((order) => (
-          <div key={order.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <div className="flex items-center space-x-3">
-              {getStatusIcon(order.status)}
-              <div>
-                <p className="font-medium text-gray-900">{order.id}</p>
-                <p className="text-sm text-gray-600">{order.supplier}</p>
+      </CardHeader>
+      <CardContent className="p-6 flex-1"> {/* Use flex-1 */}
+        {validOrders.length > 0 ? (
+          // Use ScrollArea if content might overflow
+           <ScrollArea className="h-[300px] -mx-3"> {/* Negative margin to counteract item padding */}
+             <div className="space-y-3 px-3"> {/* Add padding back */}
+                {validOrders.map((order) => (
+                  // --- THIS IS THE FIX ---
+                  // Applied the item structure and styling from your snippet
+                  <div key={order.OrderID} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      {getStatusIcon(order.Status)}
+                      <div>
+                        <p className="font-medium text-gray-900">#{order.OrderID}</p>
+                        {/* Show PlacedBy for admin instead of supplier */}
+                        {userRole === 'admin' && (
+                            <div className="text-sm text-gray-600 flex items-center">
+                                 <Avatar className="h-4 w-4 mr-1">
+                                     <AvatarFallback className="text-xs bg-gray-200 text-gray-600">{getInitials(order.PlacedBy)}</AvatarFallback>
+                                 </Avatar>
+                                 {order.PlacedBy || 'N/A'}
+                            </div>
+                        )}
+                         {/* Optional: Show minimal info for staff if needed */}
+                         {/* {userRole === 'staff' && (
+                           <p className="text-sm text-gray-600">Your Order</p>
+                         )} */}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900">${order.TotalAmount.toFixed(2)}</p>
+                      {/* Apply status color class */}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.Status)}`}>
+                        {order.Status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div className="text-right">
-              <p className="font-medium text-gray-900">{order.amount}</p>
-              <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                {order.status}
-              </span>
-            </div>
+           </ScrollArea>
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-sm text-center text-gray-500">No recent orders found.</p>
           </div>
-        ))}
-      </div>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

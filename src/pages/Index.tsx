@@ -3,33 +3,28 @@ import { Layout } from '../components/Layout';
 import { Dashboard } from '../components/Dashboard';
 
 const Index = () => {
-  const [user, setUser] = useState<{name: string, role: 'admin' | 'staff'} | null>(null);
+  // --- THIS IS THE FIX ---
+  // No need to fetch user here anymore, Layout handles it.
+  // We just need a simple loading state until Layout mounts.
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      
-      // THE FIX: Correctly read 'Role' (uppercase) and map it
-      const mappedRole: 'admin' | 'staff' = parsedUser.Role === 'Administrator' ? 'admin' : 'staff';
-
-      setUser({
-        name: parsedUser.Name || 'User',
-        role: mappedRole
-      });
-    }
+    // Simulate loading or wait for necessary setup
+    setIsReady(true);
   }, []);
 
-  if (!user) {
+  if (!isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    // --- THIS IS THE FIX ---
+    // Removed userRole and userName props from Layout
+    <Layout>
       <Dashboard />
     </Layout>
   );

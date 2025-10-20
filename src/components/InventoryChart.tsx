@@ -1,57 +1,68 @@
-
 import React from 'react';
-import { BarChart3, TrendingUp } from 'lucide-react';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { Skeleton } from './ui/skeleton';
 
-export const InventoryChart: React.FC = () => {
-  // Mock data for the chart
-  const chartData = [
-    { day: 'Mon', usage: 65, stock: 320 },
-    { day: 'Tue', usage: 78, stock: 285 },
-    { day: 'Wed', usage: 52, stock: 310 },
-    { day: 'Thu', usage: 91, stock: 275 },
-    { day: 'Fri', usage: 67, stock: 295 },
-    { day: 'Sat', usage: 43, stock: 315 },
-    { day: 'Sun', usage: 38, stock: 325 }
-  ];
+interface InventoryChartProps {
+    data: Array<{ date: string; ItemsUsed: number }>;
+}
 
-  const maxUsage = Math.max(...chartData.map(d => d.usage));
+export const InventoryChart: React.FC<InventoryChartProps> = ({ data }) => {
 
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Weekly Stock Usage</h3>
-          <p className="text-sm text-gray-600">Inventory consumption trends</p>
-        </div>
-        <div className="flex items-center space-x-2 text-green-600">
-          <TrendingUp className="w-4 h-4" />
-          <span className="text-sm font-medium">+8.2%</span>
-        </div>
-      </div>
+    const chartConfig = {
+        ItemsUsed: { label: "Items Used", color: "hsl(var(--primary))" },
+    };
 
-      <div className="space-y-4">
-        {chartData.map((item, index) => (
-          <div key={index} className="flex items-center space-x-3">
-            <span className="text-xs font-medium text-gray-600 w-8">{item.day}</span>
-            <div className="flex-1 flex items-center space-x-2">
-              <div className="flex-1 bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(item.usage / maxUsage) * 100}%` }}
-                ></div>
-              </div>
-              <span className="text-xs font-medium text-gray-900 w-8">{item.usage}</span>
+    const hasData = data && data.length > 0;
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Weekly Stock Usage</h3>
+                <p className="text-sm text-gray-500">Items used per day (Last 7 days)</p>
             </div>
-          </div>
-        ))}
-      </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">Total Usage This Week</span>
-          <span className="font-semibold text-gray-900">434 items</span>
+            <div className="flex-1 min-h-[250px]">
+                {hasData ? (
+                    // --- THIS IS THE FIX ---
+                    // ChartContainer now correctly wraps ResponsiveContainer and BarChart
+                    <ChartContainer config={chartConfig} className="h-full w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3"/>
+                                <XAxis
+                                    dataKey="date"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                    fontSize={12}
+                                />
+                                <YAxis
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickMargin={10}
+                                    fontSize={12}
+                                    allowDecimals={false}
+                                 />
+                                {/* Tooltip is now correctly nested within ChartContainer */}
+                                <ChartTooltip
+                                    cursor={false}
+                                    content={<ChartTooltipContent indicator="dashed" />}
+                                />
+                                <Bar
+                                    dataKey="ItemsUsed"
+                                    fill="var(--color-ItemsUsed)"
+                                    radius={[4, 4, 0, 0]}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </ChartContainer> // End ChartContainer
+                ) : (
+                    <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                        No usage data available for the past week.
+                    </div>
+                )}
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
