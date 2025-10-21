@@ -145,26 +145,35 @@ router.post('/reorder-all-low-stock', async (req, res) => {
     }
 
     const pool = await poolPromise;
-    const transaction = new sql.Transaction(pool);
+    const transaction = new sql.Transaction(pool); // Use sql.Transaction
 
     try {
         await transaction.begin();
-        const request = new sql.Request(transaction);
 
-        // 1. Find all low-stock items and calculate the quantity needed to restock.
-        const lowStockItems = await request.query(`
+        // 1. Find all low-stock items *for that specific user*.
+        // --- FIX: Create a request and pass the transaction to it ---
+        const lowStockRequest = new sql.Request(transaction); 
+        
+        // --- FIX: Add the UserID as an input for the query ---
+        lowStockRequest.input('UserID', sql.Int, userId);
+
+        const lowStockItems = await lowStockRequest.query(`
             SELECT 
                 i.ProductID,
                 p.Price,
                 (i.ReorderThreshold - i.StockQuantity) as QuantityToOrder
             FROM Inventory i
             JOIN Products p ON i.ProductID = p.ProductID
-            WHERE i.StockQuantity < i.ReorderThreshold AND (i.ReorderThreshold - i.StockQuantity) > 0;
+            WHERE 
+                i.StockQuantity < i.ReorderThreshold 
+                AND (i.ReorderThreshold - i.StockQuantity) > 0
+                AND i.UserID = @UserID; -- <-- THE CRITICAL FIX IS HERE
         `);
 
         if (lowStockItems.recordset.length === 0) {
             await transaction.rollback();
-            return res.status(200).send({ message: 'No items require reordering.' });
+            // Send a more specific message
+            return res.status(200).send({ message: 'You have no items that require reordering.' });
         }
 
         // 2. Calculate the total amount for the new order.
@@ -173,7 +182,9 @@ router.post('/reorder-all-low-stock', async (req, res) => {
         }, 0);
 
         // 3. Create a new order.
-        const orderResult = await request
+        // --- FIX: Must create a new request for this query ---
+        const orderRequest = new sql.Request(transaction);
+        const orderResult = await orderRequest
             .input('UserID', sql.Int, userId)
             .input('TotalAmount', sql.Decimal(10, 2), totalAmount)
             .query('INSERT INTO Orders (UserID, TotalAmount, Status) OUTPUT INSERTED.OrderID VALUES (@UserID, @TotalAmount, \'Pending\');');
@@ -182,7 +193,8 @@ router.post('/reorder-all-low-stock', async (req, res) => {
 
         // 4. Add each low-stock item to the new order.
         for (const item of lowStockItems.recordset) {
-            const itemRequest = new sql.Request(transaction);
+            // --- FIX: Must create a new request for each loop iteration ---
+            const itemRequest = new sql.Request(transaction); 
             await itemRequest
                 .input('OrderID', sql.Int, newOrderId)
                 .input('ProductID', sql.Int, item.ProductID)
@@ -195,7 +207,12 @@ router.post('/reorder-all-low-stock', async (req, res) => {
         res.status(201).json({ message: `Successfully created reorder #${newOrderId} for ${lowStockItems.recordset.length} items.`, orderId: newOrderId });
 
     } catch (error) {
-        await transaction.rollback();
+        // Just in case something failed, roll back
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            console.error("Error rolling back transaction:", rollbackError);
+        }
         console.error("Error creating bulk reorder:", error);
         res.status(500).send({ message: 'Server error during bulk reorder.' });
     }

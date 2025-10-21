@@ -98,20 +98,12 @@ export const Dashboard: React.FC = () => {
         toast({ title: "Submitting...", description: "Creating a bulk reorder for all critical items." });
 
         try {
-            const itemsToReorder = data.lowStockAlerts.map(item => ({
-                productName: item.Name,
-                quantity: item.ReorderThreshold ? item.ReorderThreshold * 2 : 50
-            }));
-
-            if (itemsToReorder.length === 0) {
-                 toast({ title: "No Items", description: "Could not determine items to reorder.", variant: "destructive" });
-                 return;
-            }
-
-            const response = await fetch('/api/orders/bulk-reorder', {
+            // --- FIX 1: The URL is changed to match the backend route ---
+            const response = await fetch('/api/orders/reorder-all-low-stock', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, items: itemsToReorder })
+                // --- FIX 2: The backend only needs the userId, not the items list ---
+                body: JSON.stringify({ userId: user.id })
             });
 
             const result = await response.json();
@@ -124,10 +116,25 @@ export const Dashboard: React.FC = () => {
                 title: "Success!",
                 description: result.message,
             });
-             // Consider re-fetching dashboard data here to update the low stock list
-            // Example:
-            // setIsLoading(true);
-            // fetchDashboardData(); // Assuming you extract the fetch logic into a function
+
+            // Re-fetch dashboard data to update the low stock list
+            setIsLoading(true);
+            fetch('/api/dashboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, userRole: user.rawRole }),
+            })
+            .then(res => res.json())
+            .then(dashboardData => {
+                setData(dashboardData);
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error("Failed to re-fetch dashboard data:", err);
+                toast({ title: "Error", description: "Could not refresh dashboard data.", variant: "destructive" });
+                setIsLoading(false);
+            });
+            
         } catch (error: any) {
             toast({
                 title: "Error",
@@ -136,7 +143,6 @@ export const Dashboard: React.FC = () => {
             });
         }
     };
-
 
     if (isLoading) {
         return (
