@@ -69,6 +69,36 @@ router.post('/login', async (req, res) => {
         res.status(500).send({ message: 'Server error during login.' });
     }
 });
-
+router.post('/verify-password', (req, res) => {
+    const { userId, password } = req.body;
+  
+    if (!userId || !password) {
+      return res.status(400).json({ message: 'User ID and password are required' });
+    }
+  
+    const sql = 'SELECT Password FROM Users WHERE UserID = ?';
+    db.query(sql, [userId], (err, rows) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ message: 'Server error' });
+      }
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+  
+      const user = rows[0];
+      bcrypt.compare(password, user.Password, (err, isMatch) => {
+        if (err) {
+          console.error('Bcrypt error:', err);
+          return res.status(500).json({ message: 'Error verifying password' });
+        }
+        if (isMatch) {
+          return res.status(200).json({ message: 'Password verified successfully' });
+        } else {
+          return res.status(401).json({ message: 'Current password is incorrect' });
+        }
+      });
+    });
+  });
 
 module.exports = router;
