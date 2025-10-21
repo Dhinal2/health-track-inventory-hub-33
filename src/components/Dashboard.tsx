@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // <-- Corrected this line
 import { StatsCard } from './StatsCard';
 import { InventoryChart } from './InventoryChart';
 import { RecentOrders } from './RecentOrders';
@@ -30,11 +30,18 @@ interface StatData {
     changeType?: 'positive' | 'negative' | 'neutral';
 }
 
+interface WeeklyUsageData {
+    day: string;
+    usage: number;
+}
+
 interface DashboardApiResponse {
     stats: StatData[];
     recentOrders: any[];
     lowStockAlerts: any[];
-    weeklyUsage: any[];
+    weeklyUsage: WeeklyUsageData[];
+    usageChange: string;
+    usageChangeType: 'positive' | 'negative' | 'neutral';
 }
 
 
@@ -61,7 +68,12 @@ export const Dashboard: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.rawRole }),
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`Server responded with ${res.status}`);
+                }
+                return res.json();
+            })
             .then(dashboardData => {
                 setData(dashboardData);
                 setIsLoading(false);
@@ -72,58 +84,79 @@ export const Dashboard: React.FC = () => {
                 setIsLoading(false);
             });
         } else {
-            setIsLoading(false);
+            setIsLoading(false); // If no user data, stop loading
+            // Optionally redirect to login or show a message
         }
-    }, [toast]);
+    }, [toast]); // Dependency array includes toast
 
     const handleReorderAll = async () => {
-        if (!user) return;
+        if (!user || !data || !data.lowStockAlerts || data.lowStockAlerts.length === 0) {
+            toast({ title: "No Items", description: "No low stock items to reorder.", variant: "default" });
+            return;
+        }
 
         toast({ title: "Submitting...", description: "Creating a bulk reorder for all critical items." });
-        
+
         try {
-            const response = await fetch('/api/orders/reorder-all-low-stock', {
+            const itemsToReorder = data.lowStockAlerts.map(item => ({
+                productName: item.Name,
+                quantity: item.ReorderThreshold ? item.ReorderThreshold * 2 : 50
+            }));
+
+            if (itemsToReorder.length === 0) {
+                 toast({ title: "No Items", description: "Could not determine items to reorder.", variant: "destructive" });
+                 return;
+            }
+
+            const response = await fetch('/api/orders/bulk-reorder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id })
+                body: JSON.stringify({ userId: user.id, items: itemsToReorder })
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.message || 'Failed to create reorder.');
+                throw new Error(result.message || 'Failed to create bulk reorder.');
             }
-            
+
             toast({
                 title: "Success!",
                 description: result.message,
             });
+             // Consider re-fetching dashboard data here to update the low stock list
+            // Example:
+            // setIsLoading(true);
+            // fetchDashboardData(); // Assuming you extract the fetch logic into a function
         } catch (error: any) {
             toast({
                 title: "Error",
-                description: error.message || "Could not submit reorder request.",
+                description: error.message || "Could not submit bulk reorder request.",
                 variant: "destructive",
             });
         }
     };
-    
+
+
     if (isLoading) {
         return (
             <div className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    <Skeleton className="h-28" />
                     <Skeleton className="h-28" />
                     <Skeleton className="h-28" />
                     <Skeleton className="h-28" />
                 </div>
-                <div className="grid gap-6 md:grid-cols-2">
-                    <Skeleton className="h-96" />
-                    <Skeleton className="h-96" />
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <Skeleton className="h-96 lg:col-span-1" />
+                    <Skeleton className="h-96 lg:col-span-2" />
                 </div>
+                <Skeleton className="h-64" />
             </div>
         );
     }
-    
-    if (!user || !data) {
+
+    if (!user || !data || !data.stats || !data.weeklyUsage) {
         return <div className="text-center text-muted-foreground">Could not load dashboard data. Please try again later.</div>;
     }
 
@@ -147,13 +180,19 @@ export const Dashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1"><InventoryChart data={data.weeklyUsage} /></div>
+                <div className="lg:col-span-1">
+                    <InventoryChart
+                        data={data.weeklyUsage}
+                        usageChange={data.usageChange}
+                        usageChangeType={data.usageChangeType}
+                    />
+                </div>
                 <div className="lg:col-span-2"><RecentOrders orders={data.recentOrders} userRole={user.role} /></div>
             </div>
 
-            <LowStockAlerts 
-                items={data.lowStockAlerts} 
-                userRole={user.role} 
+            <LowStockAlerts
+                items={data.lowStockAlerts}
+                userRole={user.role}
                 onReorderAll={handleReorderAll}
              />
         </div>
