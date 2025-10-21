@@ -28,6 +28,10 @@ const Payment = () => {
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff' } | null>(null);
   const [amountAlreadyPaid, setAmountAlreadyPaid] = useState(0);
 
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvc, setCvc] = useState('');
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -57,9 +61,8 @@ const Payment = () => {
         const data: Invoice = await response.json();
         setInvoice(data);
 
-        // --- LOGIC FIX: Calculate and set the correct remaining balance ---
         if (data.PaymentStatus === 'Partially Paid') {
-            const alreadyPaid = data.TotalAmount / 2; // Assuming partial payment is always 50%
+            const alreadyPaid = data.TotalAmount / 2;
             const remaining = data.TotalAmount - alreadyPaid;
             setAmountAlreadyPaid(alreadyPaid);
             setPaymentAmount(remaining.toString());
@@ -78,6 +81,31 @@ const Payment = () => {
     }
   };
 
+  // --- NEW: Formatting functions ---
+
+  const formatCardNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 16);
+    const parts = [];
+    for (let i = 0; i < digits.length; i += 4) {
+      parts.push(digits.slice(i, i + 4));
+    }
+    return parts.join(' ');
+  };
+
+  const formatExpiry = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 4);
+    if (digits.length > 2) {
+      return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    return digits;
+  };
+
+  const formatCvc = (value: string) => {
+    return value.replace(/\D/g, '').slice(0, 4);
+  };
+  
+  // --- End of formatting functions ---
+
   const handlePayment = async () => {
     if (!invoice || !paymentAmount) return;
 
@@ -86,6 +114,38 @@ const Payment = () => {
       toast({ title: 'Invalid Amount', description: `Please enter a valid amount.`, variant: 'destructive' });
       return;
     }
+
+    // --- Updated card validation (removes spaces first) ---
+    const cardNumberValid = /^\d{16}$/.test(cardNumber.replace(/\s/g, ''));
+    if (!cardNumberValid) {
+        toast({ title: 'Invalid Card', description: 'Please enter a 16-digit card number.', variant: 'destructive' });
+        return;
+    }
+
+    // Expiry validation remains the same as our format matches MM/YY
+    const expiryValid = /^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry);
+    if (!expiryValid) {
+        toast({ title: 'Invalid Expiry', description: 'Please use MM/YY format.', variant: 'destructive' });
+        return;
+    }
+
+    const [month, year] = expiry.split('/');
+    const expiryDate = new Date(parseInt(`20${year}`), parseInt(month), 0); 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); 
+
+    if (expiryDate < today) {
+         toast({ title: 'Card Expired', description: 'This card has expired.', variant: 'destructive' });
+        return;
+    }
+
+    // CVC validation remains the same
+    const cvcValid = /^\d{3,4}$/.test(cvc);
+    if (!cvcValid) {
+        toast({ title: 'Invalid CVC', description: 'Please enter a 3 or 4-digit CVC.', variant: 'destructive' });
+        return;
+    }
+    // --- End of validation ---
 
     try {
       const response = await fetch(`http://localhost:3001/api/invoices/${invoice.InvoiceID}/pay`, {
@@ -139,12 +199,37 @@ const Payment = () => {
             <Input id="paymentAmount" type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
           </div>
           <div className="space-y-4 pt-4 border-t">
-             <h3 className="font-semibold">Payment Information</h3>
-             <div className="space-y-2"><Label htmlFor="cardNumber">Card Number</Label><Input id="cardNumber" placeholder="**** **** **** 1234" /></div>
-             <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2"><Label htmlFor="expiry">Expiry</Label><Input id="expiry" placeholder="MM/YY" /></div>
-                <div className="space-y-2"><Label htmlFor="cvc">CVC</Label><Input id="cvc" placeholder="123" /></div>
-             </div>
+              <h3 className="font-semibold">Payment Information</h3>
+              {/* --- UPDATED: Connect inputs to state and formatting functions --- */}
+              <div className="space-y-2">
+                <Label htmlFor="cardNumber">Card Number</Label>
+                <Input 
+                  id="cardNumber" 
+                  placeholder="**** **** **** ****" // Updated placeholder
+                  value={cardNumber} 
+                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))} 
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="expiry">Expiry</Label>
+                  <Input 
+                    id="expiry" 
+                    placeholder="MM/YY" 
+                    value={expiry} 
+                    onChange={(e) => setExpiry(formatExpiry(e.target.value))} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cvc">CVC</Label>
+                  <Input 
+                    id="cvc" 
+                    placeholder="123" 
+                    value={cvc} 
+                    onChange={(e) => setCvc(formatCvc(e.target.value))} 
+                  />
+                </div>
+              </div>
           </div>
         </CardContent>
         <CardFooter>
@@ -159,7 +244,7 @@ const Payment = () => {
   }
 
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    <Layout>
       <div className="p-4">{renderContent()}</div>
     </Layout>
   );
