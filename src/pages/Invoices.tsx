@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
-import { Plus, Download } from 'lucide-react';
+import { Download } from 'lucide-react'; // Removed 'Plus'
 import { InvoiceFilters } from '@/components/InvoiceFilters';
 import { InvoicesTable } from '@/components/InvoicesTable';
 import { InvoiceDetailsModal } from '@/components/InvoiceDetailsModal';
-import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
+// Removed GenerateInvoiceModal import
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Invoice, Order, FrontendPaymentStatus, BackendPaymentStatus } from '@/types';
+import { format } from 'date-fns'; // Import format for date formatting in CSV
 
 interface BackendInvoice {
   InvoiceID: number;
@@ -44,7 +45,7 @@ const Invoices = () => {
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff'; rawRole: string } | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  // Removed isGenerateModalOpen state
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -95,6 +96,7 @@ const Invoices = () => {
         const data: BackendInvoice[] = await response.json();
         const formattedInvoices: Invoice[] = data.map((invoice) => {
           const grandTotal = invoice.TotalAmount;
+          // Note: This calculation might be simplified, fetch amountPaid from backend if possible
           const amountPaid = invoice.PaymentStatus === 'Paid' ? grandTotal : (invoice.PaymentStatus === 'Partially Paid' ? grandTotal / 2 : 0);
           return {
             invoiceID: invoice.InvoiceID,
@@ -103,12 +105,12 @@ const Invoices = () => {
             totalAmount: invoice.TotalAmount,
             paymentStatus: mapBackendStatus(invoice.PaymentStatus),
             issueDate: invoice.IssueDate,
-            dueDate: invoice.DueDate || new Date().toISOString(),
+            dueDate: invoice.DueDate || '', // Use empty string or handle null properly
             id: `INV-${invoice.InvoiceID.toString().padStart(3, '0')}`,
             orderId: `ORD-${invoice.OrderID.toString().padStart(3, '0')}`,
             facilityName: '',
             items: [],
-            tax: 0,
+            tax: 0, // This should ideally come from backend
             grandTotal,
             amountPaid,
             outstandingBalance: grandTotal - amountPaid,
@@ -119,6 +121,7 @@ const Invoices = () => {
         setInvoices(formattedInvoices);
       } else {
         setInvoices([]);
+        toast({ title: "Error", description: "Failed to fetch invoices.", variant: "destructive" });
       }
     } catch (error) {
       toast({ title: "Network Error", description: "Could not connect to the server.", variant: "destructive" });
@@ -136,31 +139,7 @@ const Invoices = () => {
     toast({ title: "Status Updated", description: `Invoice ${invoiceId} marked as ${newStatus}.` });
   };
 
-  const handleInvoiceGenerate = (invoiceData: any) => {
-    const newInvoice: Invoice = {
-        invoiceID: invoices.length + 100,
-        orderID: parseInt(invoiceData.orderId.replace('ORD-', '')),
-        customerName: invoiceData.customerName,
-        totalAmount: invoiceData.totalAmount,
-        paymentStatus: 'unpaid',
-        issueDate: new Date().toISOString(),
-        dueDate: invoiceData.dueDate,
-        id: `INV-${(invoices.length + 100).toString().padStart(3, '0')}`,
-        orderId: invoiceData.orderId,
-        facilityName: '',
-        items: invoiceData.items,
-        tax: invoiceData.tax,
-        grandTotal: invoiceData.grandTotal,
-        amountPaid: 0,
-        outstandingBalance: invoiceData.grandTotal,
-        customerDetails: invoiceData.customerDetails,
-        paymentHistory: [],
-        notes: invoiceData.notes,
-    };
-    setInvoices(prev => [newInvoice, ...prev]);
-    toast({ title: "Invoice Generated", description: `Invoice ${newInvoice.id} has been created.` });
-  };
-
+  // Removed handleInvoiceGenerate function
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(invoice => {
@@ -169,11 +148,24 @@ const Invoices = () => {
           invoice.customerName.toLowerCase().includes(filters.search.toLowerCase())
         : true;
       const statusMatch = filters.paymentStatus !== 'all' ? invoice.paymentStatus === filters.paymentStatus : true;
-      return searchMatch && statusMatch;
+
+      // Date Filtering
+      const issueDate = new Date(invoice.issueDate);
+      const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : null;
+      const toDate = filters.dateTo ? new Date(filters.dateTo) : null;
+      // Adjust toDate to include the whole day
+      if (toDate) toDate.setHours(23, 59, 59, 999);
+
+      const dateMatch =
+        (!fromDate || issueDate >= fromDate) &&
+        (!toDate || issueDate <= toDate);
+
+      return searchMatch && statusMatch && dateMatch;
     });
   }, [invoices, filters]);
 
   const handleViewDetails = async (invoice: Invoice) => {
+    // Keep this function as is for viewing details
     try {
       const response = await fetch(`/api/invoices/${invoice.invoiceID}`);
       if(response.ok) {
@@ -193,12 +185,16 @@ const Invoices = () => {
                 unitPrice: item.UnitPrice,
                 subtotal: item.Quantity * item.UnitPrice,
             })),
-            paymentHistory: details.PaymentHistory.map((p: any) => ({
+             paymentHistory: details.PaymentHistory.map((p: any) => ({
                 PaymentID: p.PaymentID,
                 amount: p.Amount || 0,
                 date: p.PaymentDate,
                 method: p.PaymentMethod
             })),
+             // Recalculate amounts based on detailed data if necessary
+            amountPaid: details.PaymentHistory.reduce((sum: number, p: any) => sum + (p.Amount || 0), 0),
+            outstandingBalance: invoice.grandTotal - details.PaymentHistory.reduce((sum: number, p: any) => sum + (p.Amount || 0), 0),
+            tax: (details.TotalAmount / 1.1) * 0.1, // Example tax calculation if needed, adjust as per your logic
         };
         setSelectedInvoice(detailedInvoice);
         setIsDetailsModalOpen(true);
@@ -211,6 +207,7 @@ const Invoices = () => {
   };
 
   const handlePayNow = async (invoice: Invoice) => {
+    // Keep this function as is
     setIsLoading(true);
     try {
       const response = await fetch('/api/orders/user-orders', {
@@ -239,6 +236,61 @@ const Invoices = () => {
     }
   };
 
+  // --- THIS IS THE FIX for Export ---
+  const handleExport = () => {
+    if (filteredInvoices.length === 0) {
+      toast({ title: "No Data", description: "There are no invoices to export based on the current filters.", variant: "default" });
+      return;
+    }
+
+    // Define CSV Headers
+    const headers = [
+      "Invoice ID",
+      "Order ID",
+      "Customer Name",
+      "Issue Date",
+      "Due Date",
+      "Total Amount",
+      "Amount Paid",
+      "Outstanding Balance",
+      "Payment Status"
+    ];
+
+    // Convert invoice data to CSV rows
+    const csvRows = filteredInvoices.map(inv => [
+      `"${inv.id}"`, // Enclose in quotes to handle potential commas in IDs
+      `"${inv.orderId}"`,
+      `"${inv.customerName.replace(/"/g, '""')}"`, // Escape double quotes within names
+      format(new Date(inv.issueDate), 'yyyy-MM-dd'),
+      inv.dueDate ? format(new Date(inv.dueDate), 'yyyy-MM-dd') : '',
+      inv.grandTotal.toFixed(2),
+      inv.amountPaid.toFixed(2),
+      inv.outstandingBalance.toFixed(2),
+      inv.paymentStatus.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) // Format status
+    ].join(','));
+
+    // Combine headers and rows
+    const csvString = [headers.join(','), ...csvRows].join('\n');
+
+    // Create a Blob and trigger download
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) { // Feature detection
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'invoices.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url); // Clean up
+    } else {
+       toast({ title: "Export Failed", description: "Your browser does not support automatic CSV downloads.", variant: "destructive" });
+    }
+     toast({ title: "Export Successful", description: "Invoices.csv has been downloaded.", variant: "default" });
+  };
+
+
   const getPaymentStatusBadgeVariant = (status: FrontendPaymentStatus) => {
     switch (status) {
         case 'paid': return 'default';
@@ -249,8 +301,8 @@ const Invoices = () => {
     }
   };
 
-  if (isLoading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">...Loading</div>;
+  if (!user) { // Simplified loading state check
+    return <div className="min-h-screen flex items-center justify-center">...Loading User Data</div>;
   }
 
   return (
@@ -259,28 +311,33 @@ const Invoices = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Invoices Management</h1>
           <div className="flex space-x-2">
-            {user.role === 'admin' && <Button variant="outline"><Download className="w-4 h-4 mr-2" /> Export</Button>}
-            <Button onClick={() => setIsGenerateModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Generate Invoice</Button>
+            {/* --- THIS IS THE FIX: Export button available for all roles --- */}
+            <Button variant="outline" onClick={handleExport} disabled={isLoading}>
+                <Download className="w-4 h-4 mr-2" /> Export
+            </Button>
+            {/* Removed Generate Invoice Button */}
           </div>
         </div>
 
         <InvoiceFilters filters={filters} onFiltersChange={setFilters} />
 
-        <InvoicesTable
-          invoices={filteredInvoices}
-          userRole={user.role}
-          onViewDetails={handleViewDetails}
-          onPayNow={handlePayNow}
-          onDownloadPDF={handleViewDetails} 
-          onPaymentStatusUpdate={handlePaymentStatusUpdate}
-          getPaymentStatusBadgeVariant={getPaymentStatusBadgeVariant}
-        />
+        {/* --- Display loading indicator for table --- */}
+        {isLoading ? (
+             <div className="text-center p-4">Loading invoices...</div>
+        ) : (
+            <InvoicesTable
+              invoices={filteredInvoices}
+              userRole={user.role}
+              onViewDetails={handleViewDetails}
+              onPayNow={handlePayNow}
+              onDownloadPDF={handleViewDetails} // Keep linking to details modal for now
+              onPaymentStatusUpdate={handlePaymentStatusUpdate}
+              getPaymentStatusBadgeVariant={getPaymentStatusBadgeVariant}
+            />
+        )}
 
-        <GenerateInvoiceModal
-          isOpen={isGenerateModalOpen}
-          onClose={() => setIsGenerateModalOpen(false)}
-          onInvoiceGenerate={handleInvoiceGenerate}
-        />
+
+        {/* Removed GenerateInvoiceModal */}
 
         <InvoiceDetailsModal
           isOpen={isDetailsModalOpen}

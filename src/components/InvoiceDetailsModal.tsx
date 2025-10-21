@@ -70,10 +70,6 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                     <span className="text-muted-foreground">Date Issued:</span>
                     <span>{format(new Date(invoice.issueDate), 'MMM dd, yyyy')}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Due Date:</span>
-                    <span>{invoice.dueDate ? format(new Date(invoice.dueDate), 'MMM dd, yyyy') : 'N/A'}</span>
-                  </div>
                 </div>
               </div>
 
@@ -143,10 +139,7 @@ export const InvoiceDetailsModal: React.FC<InvoiceDetailsModalProps> = ({
                     <span>Subtotal:</span>
                     <span>${invoice.totalAmount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Tax:</span>
-                    <span>${invoice.tax.toFixed(2)}</span>
-                  </div>
+
                   <Separator />
                   <div className="flex justify-between font-bold">
                     <span>Grand Total:</span>
