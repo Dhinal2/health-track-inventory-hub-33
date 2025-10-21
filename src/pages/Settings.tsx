@@ -105,24 +105,27 @@ const Settings: React.FC = () => {
 
   const handleProfileSubmit = (values: z.infer<typeof profileSchema>) => {
     if (!currentUser) return;
+    
     fetch(`/api/users/${currentUser.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
     })
       .then((res) => {
-        if (res.ok) {
-          const userData = localStorage.getItem('user');
-          if (userData) {
-            const parsedUser = JSON.parse(userData);
-            parsedUser.Name = values.name;
-            localStorage.setItem('user', JSON.stringify(parsedUser));
-          }
-          window.dispatchEvent(new Event('userUpdated'));
-          toast({ title: 'Success!', description: 'Your profile has been updated.' });
-        } else {
-          throw new Error('Failed to update profile');
+        if (!res.ok) {
+           // Try to get error message from server
+           return res.json().then(errData => {
+             throw new Error(errData.message || 'Failed to update profile');
+           });
         }
+        return res.json(); // Parse the successful JSON response
+      })
+      .then((data) => {
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        window.dispatchEvent(new Event('userUpdated'));
+        
+        toast({ title: 'Success!', description: 'Your profile has been updated.' });
       })
       .catch((error) => {
         toast({ title: 'Error', description: error.message, variant: 'destructive' });

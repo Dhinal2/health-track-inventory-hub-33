@@ -246,9 +246,6 @@ const Inventory = () => {
               <QrCode className="h-4 w-4" />
               Use Inventory
             </Button>
-            <Button onClick={() => toast({ title: 'Exporting...', description: 'Feature coming soon.' })} variant="outline">
-              <Download className="w-4 h-4 mr-2" /> Export
-            </Button>
           </div>
         </div>
 

@@ -66,7 +66,7 @@ const Orders = () => {
     } else {
         setIsLoading(false);
     }
-  }, []);
+  }, [toast]); // Added toast to dependency array
 
   const fetchOrders = async (userId: number, userRole: string) => {
     setIsLoading(true);
@@ -183,7 +183,8 @@ const Orders = () => {
   }
 
   return (
-    <Layout userRole={user.role} userName={user.name}>
+    // --- FIX: Removed userRole and userName props ---
+    <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Orders Management</h1>
