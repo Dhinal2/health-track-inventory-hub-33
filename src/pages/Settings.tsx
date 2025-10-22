@@ -85,21 +85,45 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     if (currentUser?.id) {
+      // Fetch user details for the profile form
       fetch(`/api/users/${currentUser.id}`)
-        .then((res) => res.json())
+        .then((res) => {
+             if (!res.ok) {
+                 // Basic error checking
+                 return res.json().then(errData => { throw new Error(errData.message || `Failed to fetch user data: ${res.status}`) });
+             }
+             return res.json();
+        })
         .then((data) => {
+          console.log("Fetched user data for settings form:", data); // Keep for debugging if needed
+
+          // --- THIS IS THE FIX ---
+          // Explicitly map the lowercase 'contactnumber' from the API data
+          // to the camelCase 'contactNumber' expected by the form schema.
           profileForm.reset({
-            name: data.name,
-            email: data.email,
-            contactNumber: data.contactNumber || '',
+            name: data.name || '',
+            email: data.email || '',
+            contactNumber: data.contactnumber || '', // Map lowercase data.contactnumber here
           });
+          // --- END FIX ---
+        })
+        .catch(error => {
+             console.error("Error fetching or parsing user data:", error);
+             toast({ title: 'Error', description: error.message || 'Could not load profile data.', variant: 'destructive' });
         });
 
+      // Fetch all users if admin (remains the same)
       if (currentUser.role === 'admin') {
-        fetch('/api/users').then((res) => res.json()).then(setUsers);
+        fetch('/api/users')
+         .then((res) => res.ok ? res.json() : Promise.reject('Failed to fetch users'))
+         .then(setUsers)
+         .catch(error => {
+              console.error("Error fetching user list:", error);
+              toast({ title: 'Error', description: 'Could not load user list.', variant: 'destructive' });
+         });
       }
     }
-  }, [currentUser, profileForm]);
+ }, [currentUser, profileForm, toast]);
 
   const isAdmin = currentUser?.role === 'admin';
 

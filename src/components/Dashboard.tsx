@@ -126,6 +126,12 @@ export const Dashboard: React.FC = () => {
             })
             .then(res => res.json())
             .then(dashboardData => {
+                console.log("Raw dashboard data received:", dashboardData); // <-- Log the whole object
+                if (dashboardData && dashboardData.lowStockAlerts) {
+                     console.log("Low Stock Alerts Data (in Dashboard):", JSON.stringify(dashboardData.lowStockAlerts, null, 2)); // <-- ADD THIS LINE
+                } else {
+                     console.log("No lowStockAlerts array found in dashboard data.");
+                }
                 setData(dashboardData);
                 setIsLoading(false);
             })

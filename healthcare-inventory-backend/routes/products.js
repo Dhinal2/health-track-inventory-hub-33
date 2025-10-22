@@ -1,13 +1,15 @@
 const express = require('express');
-const { sql, poolPromise } = require('../db');
+const db = require('../db'); // Import the new 'db' object
 const router = express.Router();
 
 // GET all products
 router.get('/', async (req, res) => {
     try {
-        const pool = await poolPromise;
-        const result = await pool.request().query('SELECT * FROM Products');
-        res.json(result.recordset);
+        // Use lowercase 'products'
+        const queryText = 'SELECT * FROM products';
+        const result = await db.query(queryText);
+        // Use .rows
+        res.json(result.rows);
     } catch (err) {
         console.error('Error fetching products:', err);
         res.status(500).send(err.message);
@@ -16,16 +18,20 @@ router.get('/', async (req, res) => {
 
 // POST a new product (for Admins)
 router.post('/', async (req, res) => {
-    const { Name, Description, Price, StockQuantity } = req.body;
+    // Use lowercase keys
+    const { name, description, price, stockquantity } = req.body;
     try {
-        const pool = await poolPromise;
-        const result = await pool.request()
-            .input('Name', sql.NVarChar, Name)
-            .input('Description', sql.NVarChar, Description)
-            .input('Price', sql.Decimal(10, 2), Price)
-            .input('StockQuantity', sql.Int, StockQuantity)
-            .query('INSERT INTO Products (Name, Description, Price, StockQuantity) OUTPUT INSERTED.* VALUES (@Name, @Description, @Price, @StockQuantity)');
-        res.status(201).json(result.recordset[0]);
+        // Use PostgreSQL INSERT with $1 placeholders and RETURNING *
+        const queryText = `
+            INSERT INTO products (name, description, price, stockquantity) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING *
+        `;
+        const values = [name, description, price, stockquantity];
+        const result = await db.query(queryText, values);
+        
+        // Use .rows[0]
+        res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Error creating product:', err);
         res.status(500).send(err.message);
@@ -35,16 +41,17 @@ router.post('/', async (req, res) => {
 // PUT (update) a product (for Admins)
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { Name, Description, Price, StockQuantity } = req.body;
+    // Use lowercase keys
+    const { name, description, price, stockquantity } = req.body;
     try {
-        const pool = await poolPromise;
-        await pool.request()
-            .input('id', sql.Int, id)
-            .input('Name', sql.NVarChar, Name)
-            .input('Description', sql.NVarChar, Description)
-            .input('Price', sql.Decimal(10, 2), Price)
-            .input('StockQuantity', sql.Int, StockQuantity)
-            .query('UPDATE Products SET Name = @Name, Description = @Description, Price = @Price, StockQuantity = @StockQuantity WHERE ProductID = @id');
+        const queryText = `
+            UPDATE products 
+            SET name = $1, description = $2, price = $3, stockquantity = $4 
+            WHERE productid = $5
+        `;
+        const values = [name, description, price, stockquantity, id];
+        await db.query(queryText, values);
+        
         res.status(200).send('Product updated successfully');
     } catch (err) {
         console.error('Error updating product:', err);
@@ -52,46 +59,44 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// --- THIS IS THE CORRECTED DELETE ROUTE ---
+// DELETE a product (for Admins)
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
+    
+    // We must use a client from the pool for transactions
+    const client = await db.pool.connect();
+
     try {
-        const pool = await poolPromise;
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        // Start the transaction
+        await client.query('BEGIN');
 
-        try {
-            // Important: First, delete references from child tables.
-            // Note: This will permanently remove the item from all past orders.
-            await new sql.Request(transaction)
-                .input('ProductID', sql.Int, id)
-                .query('DELETE FROM OrderItems WHERE ProductID = @ProductID');
+        // 1. Delete references from orderitems
+        await client.query('DELETE FROM orderitems WHERE productid = $1', [id]);
 
-            await new sql.Request(transaction)
-                .input('ProductID', sql.Int, id)
-                .query('DELETE FROM Inventory WHERE ProductID = @ProductID');
+        // 2. Delete references from inventory
+        await client.query('DELETE FROM inventory WHERE productid = $1', [id]);
 
-            // Finally, delete the product from the parent table.
-            const result = await new sql.Request(transaction)
-                .input('ProductID', sql.Int, id)
-                .query('DELETE FROM Products WHERE ProductID = @ProductID');
+        // 3. Finally, delete the product itself
+        const result = await client.query('DELETE FROM products WHERE productid = $1', [id]);
 
-            await transaction.commit();
+        // Commit the transaction
+        await client.query('COMMIT');
 
-            if (result.rowsAffected[0] > 0) {
-                res.status(200).send('Product and all associated data deleted successfully');
-            } else {
-                res.status(404).send('Product not found');
-            }
-
-        } catch (err) {
-            await transaction.rollback();
-            // Re-throw the error to be caught by the outer catch block
-            throw err;
+        // Use .rowCount
+        if (result.rowCount > 0) {
+            res.status(200).send('Product and all associated data deleted successfully');
+        } else {
+            res.status(404).send('Product not found');
         }
+
     } catch (err) {
+        // If an error occurs, roll back the transaction
+        await client.query('ROLLBACK');
         console.error('Error deleting product:', err);
         res.status(500).send({ message: 'Failed to delete product.', error: err.message });
+    } finally {
+        // IMPORTANT: Release the client back to the pool
+        client.release();
     }
 });
 

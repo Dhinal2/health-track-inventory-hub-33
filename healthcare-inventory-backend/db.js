@@ -1,25 +1,28 @@
-const sql = require('mssql');
+const { Pool } = require('pg');
 
-const config = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!',
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS', // Your server name
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false, // For local dev
-        trustServerCertificate: true // For local dev
-    }
-};
+// Create a new connection pool
+const pool = new Pool({
+  user: 'healthtrack_user',       
+  host: 'localhost',
+  database: 'HealthCareDB',
+  password: 'Pass123!', 
+  port: 5432, // Default PostgreSQL port
+});
 
-const poolPromise = new sql.ConnectionPool(config)
-    .connect()
-    .then(pool => {
-        console.log('Connected to MSSQL');
-        return pool;
-    })
-    .catch(err => console.error('Database Connection Failed! Bad Config: ', err));
+// Test the connection
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('Error acquiring client', err.stack);
+  }
+  console.log('Successfully connected to PostgreSQL database!');
+  client.release(); // Release the client back to the pool
+});
 
+// Export a query function that the rest of our app can use
 module.exports = {
-    sql,
-    poolPromise
+  // query function will be used like: db.query('SELECT * FROM users WHERE id = $1', [1])
+  query: (text, params) => pool.query(text, params),
+
+  // We also export the pool directly for more complex transactions
+  pool: pool,
 };

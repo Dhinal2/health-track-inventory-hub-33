@@ -1,14 +1,17 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const { sql, poolPromise } = require('../db'); // Correctly using your db import
+const db = require('../db'); // Import the new 'db' object
 const router = express.Router();
 
 // Get all users
 router.get('/', async (req, res) => {
   try {
-    const pool = await poolPromise;
-    const result = await pool.request().query('SELECT UserID as id, Name as name, Email as email, Role as role, Status as status FROM Users');
-    res.json(result.recordset);
+    // PostgreSQL query, using lowercase schema
+    const queryText = 'SELECT userid as id, name, email, role, status FROM users';
+    const result = await db.query(queryText);
+    
+    // Use .rows instead of .recordset
+    res.json(result.rows);
   } catch (err) {
     console.error('Error fetching all users:', err);
     res.status(500).send(err.message);
@@ -19,14 +22,13 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      // --- FIX: Alias all fields to lowercase and add ContactNumber ---
-      .query('SELECT UserID as id, Name as name, Email as email, Role as role, ContactNumber as contactNumber FROM Users WHERE UserID = @id');
+    // PostgreSQL query with $1 placeholder
+    const queryText = 'SELECT userid as id, name, email, role, contactnumber FROM users WHERE userid = $1';
+    const result = await db.query(queryText, [id]);
     
-    if (result.recordset.length > 0) {
-      res.json(result.recordset[0]);
+    // Use .rows instead of .recordset
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
     } else {
       res.status(404).send('User not found');
     }
@@ -39,7 +41,6 @@ router.get('/:id', async (req, res) => {
 // Update user profile (name, email, contactNumber, or password)
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  // --- FIX: Add contactNumber to destructuring ---
   const { name, email, password, contactNumber } = req.body;
 
   if (!name && !email && !password && !contactNumber) {
@@ -47,122 +48,74 @@ router.put('/:id', async (req, res) => {
   }
 
   try {
-    const pool = await poolPromise;
-    const request = pool.request(); 
-    
     const updateFields = [];
+    const values = [];
+    let queryIndex = 1;
 
+    // Dynamically build the query
     if (name) {
-      updateFields.push('Name = @name');
-      request.input('name', sql.NVarChar, name);
+      updateFields.push(`name = $${queryIndex++}`);
+      values.push(name);
     }
     if (email) {
-      updateFields.push('Email = @email');
-      request.input('email', sql.NVarChar, email);
+      updateFields.push(`email = $${queryIndex++}`);
+      values.push(email);
     }
-    
-    // --- FIX: Add logic to update contactNumber ---
     if (contactNumber) {
-      updateFields.push('ContactNumber = @contactNumber');
-      request.input('contactNumber', sql.NVarChar, contactNumber);
+      updateFields.push(`contactnumber = $${queryIndex++}`);
+      values.push(contactNumber);
     }
-
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
-      updateFields.push('Password = @password');
-      request.input('password', sql.NVarChar, hashedPassword);
+      updateFields.push(`password = $${queryIndex++}`);
+      values.push(hashedPassword);
     }
 
     if (updateFields.length === 0) {
       return res.status(400).json({ message: 'No fields to update.' });
     }
 
-    const queryString = `UPDATE Users SET ${updateFields.join(', ')} WHERE UserID = @id`;
-    request.input('id', sql.Int, id);
+    // Add the user ID for the WHERE clause
+    values.push(id);
+    const idIndex = queryIndex;
 
-    await request.query(queryString);
-
-    // After updating, fetch the latest user data to send back
-    const result = await pool.request()
-        .input('id', sql.Int, id)
-        // --- FIX: Ensure we fetch the updated ContactNumber here too ---
-        .query('SELECT UserID, Name, Email, Role, ContactNumber FROM Users WHERE UserID = @id');
-
-    if (result.recordset.length === 0) {
-        return res.status(404).json({ message: 'Updated user not found' });
-    }
-
-    res.json({ message: 'Profile updated successfully', user: result.recordset[0] });
-
-  } catch (err) {
-    console.error(`Error updating user ${id}:`, err);
-    if (err.number === 2627 || err.number === 2601) { 
-        return res.status(409).json({ message: 'An account with this email already exists.' });
-    }
-    res.status(500).send(err.message);
-  }
-});
-
-// --- THIS IS THE CORRECTED UPDATE ROUTE ---
-// Update user profile (name, email, or password)
-router.put('/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, email, password } = req.body;
-
-  if (!name && !email && !password) {
-    return res.status(400).json({ message: 'No valid fields provided for update' });
-  }
-
-  try {
-    const pool = await poolPromise;
-    const request = pool.request(); // Create a request object
+    // PostgreSQL UPDATE query with RETURNING clause (more efficient)
+    const queryText = `
+      UPDATE users 
+      SET ${updateFields.join(', ')} 
+      WHERE userid = $${idIndex}
+      RETURNING userid, name, email, role, contactnumber
+    `;
     
-    const updateFields = [];
+    const result = await db.query(queryText, values);
 
-    // Dynamically add fields to the update query and the request inputs
-    if (name) {
-      updateFields.push('Name = @name');
-      request.input('name', sql.NVarChar, name);
-    }
-    if (email) {
-      updateFields.push('Email = @email');
-      request.input('email', sql.NVarChar, email);
-    }
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      updateFields.push('Password = @password');
-      request.input('password', sql.NVarChar, hashedPassword);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Updated user not found' });
     }
 
-    if (updateFields.length === 0) {
-      return res.status(400).json({ message: 'No fields to update.' });
-    }
+    const updatedUser = result.rows[0];
 
-    const queryString = `UPDATE Users SET ${updateFields.join(', ')} WHERE UserID = @id`;
-    request.input('id', sql.Int, id);
-
-    await request.query(queryString);
-
-    // After updating, fetch the latest user data to send back
-    const result = await pool.request()
-        .input('id', sql.Int, id)
-        .query('SELECT UserID, Name, Email, Role FROM Users WHERE UserID = @id');
-
-    if (result.recordset.length === 0) {
-        return res.status(404).json({ message: 'Updated user not found' });
-    }
-
-    res.json({ message: 'Profile updated successfully', user: result.recordset[0] });
+    // Send back the user object with Uppercase keys, as the frontend localStorage expects this
+    res.json({ 
+      message: 'Profile updated successfully', 
+      user: {
+        UserID: updatedUser.userid,
+        Name: updatedUser.name,
+        Email: updatedUser.email,
+        Role: updatedUser.role,
+        ContactNumber: updatedUser.contactnumber
+      } 
+    });
 
   } catch (err) {
     console.error(`Error updating user ${id}:`, err);
-    if (err.number === 2627 || err.number === 2601) { // Unique constraint violation (email)
-        return res.status(409).json({ message: 'An account with this email already exists.' });
+    // Handle PostgreSQL unique violation code
+    if (err.code === '23505') { 
+      return res.status(409).json({ message: 'An account with this email already exists.' });
     }
     res.status(500).send(err.message);
   }
 });
-
 
 // Add a new user with a hashed password
 router.post('/', async (req, res) => {
@@ -173,24 +126,27 @@ router.post('/', async (req, res) => {
   }
 
   try {
-      const pool = await poolPromise;
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      const result = await pool.request()
-          .input('Name', sql.NVarChar, name)
-          .input('Email', sql.NVarChar, email)
-          .input('Password', sql.NVarChar, hashedPassword)
-          .input('Role', sql.NVarChar, role)
-          .input('ContactNumber', sql.NVarChar, contactNumber)
-          .query('INSERT INTO Users (Name, Email, Password, Role, ContactNumber) OUTPUT INSERTED.UserID, INSERTED.Name, INSERTED.Email, INSERTED.Role VALUES (@Name, @Email, @Password, @Role, @ContactNumber)');
+      // PostgreSQL INSERT with RETURNING clause
+      const queryText = `
+        INSERT INTO users (name, email, password, role, contactnumber) 
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING userid as id, name, email, role
+      `;
+      const values = [name, email, hashedPassword, role, contactNumber];
+
+      const result = await db.query(queryText, values);
       
-      const newUser = result.recordset[0];
+      // The frontend user management table expects lowercase keys, so this is fine
+      const newUser = result.rows[0];
       res.status(201).json(newUser);
 
   } catch (error) {
       console.error('Error creating user:', error);
-      if (error.number === 2627 || error.number === 2601) {
+      // Handle PostgreSQL unique violation code
+      if (error.code === '23505') {
           return res.status(409).json({ message: 'An account with this email already exists.' });
       }
       res.status(500).json({ message: 'Server error while creating user.' });
@@ -201,11 +157,11 @@ router.post('/', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('DELETE FROM Users WHERE UserID = @id');
-    if (result.rowsAffected[0] > 0) {
+    const queryText = 'DELETE FROM users WHERE userid = $1';
+    const result = await db.query(queryText, [id]);
+
+    // In 'pg', rowCount is used instead of rowsAffected
+    if (result.rowCount > 0) {
       res.send('User deleted successfully');
     } else {
       res.status(404).send('User not found');

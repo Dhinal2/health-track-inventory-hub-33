@@ -1,115 +1,140 @@
 const express = require('express');
-const { sql, poolPromise } = require('../db');
+const db = require('../db'); // Import the new 'db' object
 const router = express.Router();
 
+// POST /api/shipments/user-shipments - Fetch shipments based on user role
 router.post('/user-shipments', async (req, res) => {
     const { userId, userRole } = req.body;
     if (!userId || !userRole) {
         return res.status(400).send({ message: 'UserID and Role are required.' });
     }
     try {
-        const pool = await poolPromise;
-        let query;
+        let queryText;
+        let queryParams = [];
+
+        // Use lowercase schema, aliases for frontend keys
+        const selectFields = `
+            s.shipmentid as "ShipmentID", 
+            s.orderid as "OrderID", 
+            s.destination as "Destination", 
+            s.status as "Status", 
+            s.estimateddelivery as "EstimatedDelivery", 
+            s.origin as "Origin", 
+            s.currentlocation as "CurrentLocation"
+        `;
+
         if (userRole === 'Administrator') {
-            query = `
-                SELECT s.*, o.OrderID, u.Name as DestinationUser FROM Shipments s
-                JOIN Orders o ON s.OrderID = o.OrderID
-                JOIN Users u ON o.UserID = u.UserID
-                ORDER BY s.ShipmentID DESC
+            queryText = `
+                SELECT ${selectFields}, u.name as "DestinationUser" 
+                FROM shipments s
+                JOIN orders o ON s.orderid = o.orderid
+                JOIN users u ON o.userid = u.userid
+                ORDER BY s.shipmentid DESC
             `;
         } else {
-            query = `
-                SELECT s.*, o.OrderID, u.Name as DestinationUser FROM Shipments s
-                JOIN Orders o ON s.OrderID = o.OrderID
-                JOIN Users u ON o.UserID = u.UserID
-                WHERE o.UserID = @UserID
-                ORDER BY s.ShipmentID DESC
+            queryText = `
+                SELECT ${selectFields}, u.name as "DestinationUser" 
+                FROM shipments s
+                JOIN orders o ON s.orderid = o.orderid
+                JOIN users u ON o.userid = u.userid
+                WHERE o.userid = $1
+                ORDER BY s.shipmentid DESC
             `;
+            queryParams.push(userId);
         }
-        const request = pool.request();
-        if (userRole !== 'Administrator') {
-            request.input('UserID', sql.Int, userId);
-        }
-        const result = await request.query(query);
-        res.json(result.recordset);
+        
+        const result = await db.query(queryText, queryParams);
+        // Aliases ensure Uppercase keys for the frontend
+        res.json(result.rows);
+
     } catch (error) {
         console.error('Error fetching shipments:', error);
-        res.status(500).send({ message: 'Server error' });
+        res.status(500).send({ message: 'Server error fetching shipments' });
     }
 });
 
+// PUT /api/shipments/:id - Update shipment status, location, etc.
 router.put('/:id', async (req, res) => {
-    const { id } = req.params;
-    const { status, Destination, CurrentLocation } = req.body;
+    const { id } = req.params; // shipmentId
+    // Frontend sends Uppercase/camelCase keys
+    const { status, Destination, CurrentLocation } = req.body; 
 
     if (!status && !Destination && !CurrentLocation) {
         return res.status(400).send({ message: 'No update information provided.' });
     }
 
+    // Use a client for transaction
+    const client = await db.pool.connect();
+
     try {
-        const pool = await poolPromise;
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+        await client.query('BEGIN');
 
-        try {
-            const request = new sql.Request(transaction).input('ShipmentID', sql.Int, id);
+        const updateFields = [];
+        const values = [];
+        let queryIndex = 1;
 
-            let queryParts = [];
-            if (status) {
-                queryParts.push("Status = @Status");
-                request.input('Status', sql.NVarChar, status);
-            }
-            if (Destination) {
-                queryParts.push("Destination = @Destination");
-                request.input('Destination', sql.NVarChar, Destination);
-            }
-            if (CurrentLocation) {
-                queryParts.push("CurrentLocation = @CurrentLocation");
-                request.input('CurrentLocation', sql.NVarChar, CurrentLocation);
-            }
+        // Dynamically build the UPDATE query for shipments
+        if (status) {
+            updateFields.push(`status = $${queryIndex++}`);
+            values.push(status); // Use status directly (e.g., 'In Transit', 'Delivered')
+        }
+        if (Destination) {
+            updateFields.push(`destination = $${queryIndex++}`);
+            values.push(Destination);
+        }
+        if (CurrentLocation) {
+            updateFields.push(`currentlocation = $${queryIndex++}`);
+            values.push(CurrentLocation);
+        }
 
-            const updateShipmentQuery = `UPDATE Shipments SET ${queryParts.join(', ')} WHERE ShipmentID = @ShipmentID`;
-            await request.query(updateShipmentQuery);
+        // Add shipment ID for WHERE clause
+        values.push(id);
+        const idIndex = queryIndex;
 
-            if (status) {
-                const orderResult = await new sql.Request(transaction).input('ShipmentID', sql.Int, id).query('SELECT OrderID FROM Shipments WHERE ShipmentID = @ShipmentID');
+        const updateShipmentQuery = `
+            UPDATE shipments 
+            SET ${updateFields.join(', ')} 
+            WHERE shipmentid = $${idIndex}
+        `;
+        await client.query(updateShipmentQuery, values);
 
-                if (orderResult.recordset.length > 0) {
-                    const { OrderID } = orderResult.recordset[0];
-                    let newOrderStatus = '';
+        // If status was updated, update the corresponding order status
+        if (status) {
+            // Get the order ID associated with this shipment
+            const orderResult = await client.query('SELECT orderid FROM shipments WHERE shipmentid = $1', [id]);
 
-                    // --- THIS IS THE FIX ---
-                    // When a shipment is 'in transit', the order is 'Dispatched'.
-                    switch (status.toLowerCase()) {
-                        case 'pending':
-                            newOrderStatus = 'Dispatched';
-                            break;
-                        case 'in transit':
-                            newOrderStatus = 'Dispatched'; // Use the correct status for the order
-                            break;
-                        case 'delivered':
-                            newOrderStatus = 'Delivered';
-                            break;
-                    }
+            if (orderResult.rows.length > 0) {
+                const { orderid } = orderResult.rows[0];
+                let newOrderStatus = '';
 
-                    if (newOrderStatus) {
-                        await new sql.Request(transaction)
-                            .input('OrderID', sql.Int, OrderID)
-                            .input('Status', sql.NVarChar, newOrderStatus)
-                            .query("UPDATE Orders SET Status = @Status WHERE OrderID = @OrderID");
-                    }
+                // Map shipment status to order status (using lowercase for comparison)
+                switch (status.toLowerCase()) {
+                    case 'pending':
+                    case 'in transit': // Both pending and in transit map to Dispatched order status
+                        newOrderStatus = 'Dispatched'; 
+                        break;
+                    case 'delivered':
+                        newOrderStatus = 'Delivered';
+                        break;
+                }
+
+                // If a valid mapping exists, update the order
+                if (newOrderStatus) {
+                    const updateOrderQuery = "UPDATE orders SET status = $1 WHERE orderid = $2";
+                    await client.query(updateOrderQuery, [newOrderStatus, orderid]);
                 }
             }
-            await transaction.commit();
-            res.status(200).send({ message: `Shipment updated successfully.` });
-
-        } catch (err) {
-            await transaction.rollback();
-            throw err;
         }
+        
+        await client.query('COMMIT');
+        res.status(200).send({ message: `Shipment updated successfully.` });
+
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error updating shipment:', error);
         res.status(500).send({ message: 'Server error during shipment update' });
+    } finally {
+        client.release(); // Release client back to the pool
     }
 });
 

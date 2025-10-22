@@ -16,23 +16,24 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Eye, Download, MoreHorizontal, CheckCircle, Clock, AlertCircle, CreditCard } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns'; // Added parseISO, isValid
 import { Invoice, FrontendPaymentStatus as PaymentStatus } from '@/types';
 
 interface InvoicesTableProps {
   invoices: Invoice[];
   userRole: 'admin' | 'staff';
-  onPaymentStatusUpdate: (invoiceId: string, newStatus: PaymentStatus) => void;
+  // --- FIX: This prop IS required by the parent Invoices.tsx ---
+  onPaymentStatusUpdate: (invoiceId: string, newStatus: PaymentStatus) => void; 
   onViewDetails: (invoice: Invoice) => void;
-  onDownloadPDF: (invoice: Invoice) => void;
+  onDownloadPDF: (invoice: Invoice) => void; 
   onPayNow: (invoice: Invoice) => void;
-  getPaymentStatusBadgeVariant: (status: PaymentStatus) => string;
+  getPaymentStatusBadgeVariant: (status: PaymentStatus) => "default" | "destructive" | "secondary"; 
 }
 
 export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   invoices,
   userRole,
-  onPaymentStatusUpdate,
+  onPaymentStatusUpdate, // --- FIX: Accept the prop ---
   onViewDetails,
   onDownloadPDF,
   onPayNow,
@@ -41,22 +42,49 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const totalPages = Math.ceil(invoices.length / itemsPerPage);
-  
+
   const paginatedInvoices = invoices.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // --- FIX: Added formatCurrency helper INSIDE this component ---
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numericAmount = Number(amount);
+    if (isNaN(numericAmount)) {
+        return '$--.--';
+    }
+    return `$${numericAmount.toFixed(2)}`;
+  };
+  // --- END ---
+
+  // --- FIX: Added formatDate helper INSIDE this component ---
+   const formatDate = (dateString: string | undefined | null) => {
+     if (!dateString) return 'N/A';
+     try {
+       const date = parseISO(dateString); 
+       if (!isValid(date)) {
+           const fallbackDate = new Date(dateString);
+            if(!isValid(fallbackDate)) throw new Error('Invalid Date');
+            return format(fallbackDate, 'MMM dd, yyyy');
+       }
+       return format(date, 'MMM dd, yyyy');
+     } catch {
+       return 'Invalid Date';
+     }
+  };
+  // --- END ---
+
 
   const getStatusIcon = (status: PaymentStatus) => {
     switch (status) {
       case 'paid':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'unpaid':
-        return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'overdue': 
+        return <Clock className="w-4 h-4 text-yellow-500" />; 
       case 'partially_paid':
         return <Clock className="w-4 h-4 text-blue-500" />;
-      case 'overdue':
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500" />;
     }
@@ -87,77 +115,89 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
               <TableRow
                 key={invoice.id}
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => onViewDetails(invoice)}
+                onClick={() => onViewDetails(invoice)} 
               >
                 <TableCell className="font-medium text-blue-600">{invoice.id}</TableCell>
                 <TableCell>{invoice.orderId}</TableCell>
                 <TableCell>
                   <div className="font-medium">{invoice.customerName}</div>
                 </TableCell>
-                <TableCell className="font-medium">${invoice.grandTotal.toFixed(2)}</TableCell>
+                {/* --- FIX: Use internal formatCurrency --- */}
+                <TableCell className="font-medium">{formatCurrency(invoice.grandTotal)}</TableCell> 
                 <TableCell>
                   {invoice.paymentStatus === 'paid' ? (
                     <span className="text-muted-foreground">$0.00</span>
                   ) : (
+                    // --- FIX: Use internal formatCurrency & ensure calculation ---
                     <span className="font-medium text-foreground">
-                      ${(invoice.outstandingBalance ?? (invoice.grandTotal - (invoice.amountPaid || 0))).toFixed(2)}
+                      {formatCurrency(Number(invoice.grandTotal) - Number(invoice.amountPaid))}
                     </span>
                   )}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center space-x-2">
                     {getStatusIcon(invoice.paymentStatus)}
-                    <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus) as any}>
+                    <Badge variant={getPaymentStatusBadgeVariant(invoice.paymentStatus)}>
                       {formatPaymentStatus(invoice.paymentStatus)}
                     </Badge>
                   </div>
                 </TableCell>
-                <TableCell>{format(new Date(invoice.issueDate), 'MMM dd, yyyy')}</TableCell>
+                 {/* --- FIX: Use internal formatDate --- */}
+                <TableCell>{formatDate(invoice.issueDate)}</TableCell> 
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end space-x-1">
                     {userRole === 'staff' && invoice.paymentStatus !== 'paid' && (
                       <Button
                         size="sm"
                         onClick={(e) => { e.stopPropagation(); onPayNow(invoice); }}
+                        aria-label={`Pay invoice ${invoice.id}`}
                       >
                         <CreditCard className="w-4 h-4 mr-2" /> Pay
                       </Button>
                     )}
                     <Button
-                      variant="ghost" size="sm"
+                      variant="ghost" size="icon" className="h-8 w-8"
                       onClick={(e) => { e.stopPropagation(); onViewDetails(invoice); }}
+                      aria-label={`View details for invoice ${invoice.id}`}
                     >
                       <Eye className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost" size="sm"
+                      variant="ghost" size="icon" className="h-8 w-8"
                       onClick={(e) => { e.stopPropagation(); onDownloadPDF(invoice); }}
+                      aria-label={`Download PDF for invoice ${invoice.id}`}
                     >
                       <Download className="w-4 h-4" />
                     </Button>
+                    {/* --- FIX: Admin actions ARE in this original component --- */}
                     {userRole === 'admin' && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}> {/* Use icon size */}
                             <MoreHorizontal className="w-4 h-4" />
+                             <span className="sr-only">Admin Actions</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'paid'); }}
                             disabled={invoice.paymentStatus === 'paid'}
+                            className="cursor-pointer" // Make it look clickable
                           >Mark as Paid</DropdownMenuItem>
                            <DropdownMenuItem
                             onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'partially_paid'); }}
                              disabled={invoice.paymentStatus === 'paid'}
+                             className="cursor-pointer"
                            >Mark as Partially Paid</DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => { e.stopPropagation(); onPaymentStatusUpdate(invoice.id, 'overdue'); }}
-                            disabled={invoice.paymentStatus === 'paid'}
+                            disabled={invoice.paymentStatus === 'paid'} // Keep disabled if already paid
+                            className="cursor-pointer"
                           >Mark as Overdue</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    )}
+                     )}
+                     {/* --- END FIX --- */}
                   </div>
                 </TableCell>
               </TableRow>
@@ -166,13 +206,13 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
         </Table>
         {invoices.length === 0 && (
             <div className="text-center py-12 text-gray-500">
-                <p>No invoices found.</p>
+                <p>No invoices found matching your criteria.</p>
             </div>
         )}
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-4"> 
           <div className="text-sm text-gray-500">
             Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
             {Math.min(currentPage * itemsPerPage, invoices.length)} of {invoices.length} invoices
@@ -183,17 +223,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
             >Previous</Button>
-             <div className="flex items-center space-x-1">
-               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                 <Button
-                   key={page}
-                   variant={currentPage === page ? "default" : "outline"}
-                   size="sm"
-                   onClick={() => setCurrentPage(page)}
-                   className="w-8"
-                 >{page}</Button>
-               ))}
-             </div>
+             <span className="text-sm text-gray-500">Page {currentPage} of {totalPages}</span> 
             <Button
               variant="outline" size="sm"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}

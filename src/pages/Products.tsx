@@ -18,6 +18,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { useToast } from '../hooks/use-toast';
 
+// Frontend Interface (keeps Uppercase for UI consistency)
 interface Product {
   ProductID: number;
   Name: string;
@@ -26,10 +27,19 @@ interface Product {
   StockQuantity: number;
 }
 
+// --- FIX: Add a type for the backend data (lowercase) ---
+interface BackendProduct {
+    productid: number;
+    name: string;
+    price: number;
+    description: string;
+    stockquantity: number;
+}
+
 const Products = () => {
   const { toast } = useToast();
   const [user, setUser] = useState<{ id: number; name: string; role: 'admin' | 'staff' } | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]); // State uses Frontend type
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -52,10 +62,18 @@ const Products = () => {
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
-      // --- FIX: Use relative proxy path ---
       const response = await fetch('/api/products');
       if (response.ok) {
-        setProducts(await response.json());
+        // --- FIX: Map backend lowercase data to frontend Uppercase state ---
+        const backendData: BackendProduct[] = await response.json();
+        const frontendData: Product[] = backendData.map(item => ({
+            ProductID: item.productid,
+            Name: item.name,
+            Price: Number(item.price), // Ensure price is a number
+            Description: item.description,
+            StockQuantity: item.stockquantity
+        }));
+        setProducts(frontendData);
       } else {
         toast({ title: 'Error', description: 'Failed to fetch products.', variant: 'destructive' });
       }
@@ -76,11 +94,12 @@ const Products = () => {
 
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // --- FIX: Use lowercase keys for the product form data state ---
   const [productFormData, setProductFormData] = useState({
-    Name: '',
-    Price: 0,
-    Description: '',
-    StockQuantity: 0,
+    name: '',
+    price: 0,
+    description: '',
+    stockquantity: 0,
   });
 
   const [deleteProductId, setDeleteProductId] = useState<number | null>(null);
@@ -93,19 +112,20 @@ const Products = () => {
 
   const handleSubmitRequest = async () => {
     if (!selectedProduct || !user) return;
+    
+    // --- FIX: Send lowercase keys to the backend ---
     const orderItem = {
-      ProductID: selectedProduct.ProductID,
-      Quantity: formData.quantity,
-      // --- THIS IS THE FIX ---
-      UnitPrice: selectedProduct.Price, // Correctly use UnitPrice
+      productid: selectedProduct.ProductID,
+      quantity: formData.quantity,
+      unitprice: selectedProduct.Price, 
     };
     const orderData = {
       userId: user.id,
       items: [orderItem],
-      totalAmount: orderItem.Quantity * orderItem.UnitPrice,
+      totalAmount: orderItem.quantity * orderItem.unitprice,
     };
     try {
-      // --- FIX: Use relative proxy path ---
+      // NOTE: We haven't converted /api/orders yet, this will fail until we do.
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,23 +142,24 @@ const Products = () => {
 
   const handleAddNew = () => {
     setEditingProduct(null);
-    setProductFormData({ Name: '', Price: 0, Description: '', StockQuantity: 0 });
+    // --- FIX: Reset with lowercase keys ---
+    setProductFormData({ name: '', price: 0, description: '', stockquantity: 0 });
     setIsAddEditModalOpen(true);
   };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    // --- FIX: Set form data with lowercase keys ---
     setProductFormData({
-      Name: product.Name,
-      Price: product.Price,
-      Description: product.Description,
-      StockQuantity: product.StockQuantity,
+      name: product.Name,
+      price: product.Price,
+      description: product.Description,
+      stockquantity: product.StockQuantity,
     });
     setIsAddEditModalOpen(true);
   };
 
   const handleSaveProduct = async () => {
-    // --- FIX: Use relative proxy path ---
     const url = editingProduct
       ? `/api/products/${editingProduct.ProductID}`
       : '/api/products';
@@ -148,13 +169,14 @@ const Products = () => {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
+        // --- FIX: Send the lowercase productFormData directly ---
         body: JSON.stringify(productFormData),
       });
       if (response.ok) {
         toast({
           title: `Product ${editingProduct ? 'updated' : 'added'} successfully`,
         });
-        fetchProducts();
+        fetchProducts(); // Refresh the list
       } else throw new Error();
     } catch {
       toast({
@@ -170,13 +192,12 @@ const Products = () => {
   const confirmDelete = async () => {
     if (!deleteProductId) return;
     try {
-      // --- FIX: Use relative proxy path ---
       const response = await fetch(`/api/products/${deleteProductId}`, {
         method: 'DELETE',
       });
       if (response.ok) {
         toast({ title: 'Product deleted successfully' });
-        fetchProducts();
+        fetchProducts(); // Refresh the list
       } else throw new Error();
     } catch {
       toast({
@@ -189,6 +210,7 @@ const Products = () => {
     }
   };
 
+  // --- FIX: Update handler to work with lowercase keys ---
   const handleProductFormChange = (field: keyof typeof productFormData, value: string | number) => {
     setProductFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -229,6 +251,7 @@ const Products = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
+                {/* --- FIX: Display data using Uppercase keys from state --- */}
                 {products.map((product, index) => (
                   <tr key={product.ProductID} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">{index + 1}</td>
@@ -266,6 +289,7 @@ const Products = () => {
             <DialogHeader>
               <DialogTitle>Request Product</DialogTitle>
             </DialogHeader>
+            {/* --- FIX: Display data using Uppercase keys from state --- */}
             {selectedProduct && (
               <div className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-lg border">
@@ -312,19 +336,20 @@ const Products = () => {
             <DialogHeader>
               <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
             </DialogHeader>
+            {/* --- FIX: Bind inputs to lowercase keys in productFormData --- */}
             <div className="space-y-4">
               <div>
                 <Label>Product Name *</Label>
                 <Input
-                  value={productFormData.Name}
-                  onChange={(e) => handleProductFormChange('Name', e.target.value)}
+                  value={productFormData.name}
+                  onChange={(e) => handleProductFormChange('name', e.target.value)}
                 />
               </div>
               <div>
                 <Label>Description</Label>
                 <Textarea
-                  value={productFormData.Description}
-                  onChange={(e) => handleProductFormChange('Description', e.target.value)}
+                  value={productFormData.description}
+                  onChange={(e) => handleProductFormChange('description', e.target.value)}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -332,9 +357,9 @@ const Products = () => {
                   <Label>Price *</Label>
                   <Input
                     type="number"
-                    value={productFormData.Price}
+                    value={productFormData.price}
                     onChange={(e) =>
-                      handleProductFormChange('Price', parseFloat(e.target.value) || 0)
+                      handleProductFormChange('price', parseFloat(e.target.value) || 0)
                     }
                   />
                 </div>
@@ -342,9 +367,9 @@ const Products = () => {
                   <Label>Stock Quantity *</Label>
                   <Input
                     type="number"
-                    value={productFormData.StockQuantity}
+                    value={productFormData.stockquantity}
                     onChange={(e) =>
-                      handleProductFormChange('StockQuantity', parseInt(e.target.value) || 0)
+                      handleProductFormChange('stockquantity', parseInt(e.target.value) || 0)
                     }
                   />
                 </div>

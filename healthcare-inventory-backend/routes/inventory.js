@@ -1,31 +1,48 @@
 const express = require('express');
-const { sql, poolPromise } = require('../db');
+const db = require('../db'); // Import the new 'db' object
 const router = express.Router();
 
+// POST /api/inventory/user-inventory - Fetch inventory for a user or all users
 router.post('/user-inventory', async (req, res) => {
     const { userId, userRole } = req.body;
     if (!userId || !userRole) {
-        return res.status(400).send('UserID and Role are required.');
+        return res.status(400).send({ message: 'UserID and Role are required.' });
     }
 
     try {
-        const pool = await poolPromise;
-        let query;
-        const selectFields = `i.InventoryID, p.ProductID, p.Price, p.Name, i.StockQuantity, i.ReorderThreshold, i.AutoReorder`;
+        let queryText;
+        let queryParams = [];
+        // Use lowercase schema, aliases for frontend keys
+        const selectFields = `
+            i.inventoryid as "InventoryID", 
+            p.productid as "ProductID", 
+            p.price as "Price", 
+            p.name as "Name", 
+            i.stockquantity as "StockQuantity", 
+            i.reorderthreshold as "ReorderThreshold", 
+            i.autoreorder as "AutoReorder"
+        `;
 
         if (userRole === 'Administrator') {
-            query = `SELECT ${selectFields}, u.Name as Owner FROM Inventory i JOIN Products p ON i.ProductID = p.ProductID JOIN Users u ON i.UserID = u.UserID`;
+            queryText = `
+                SELECT ${selectFields}, u.name as "Owner" 
+                FROM inventory i 
+                JOIN products p ON i.productid = p.productid 
+                JOIN users u ON i.userid = u.userid
+            `;
         } else {
-            query = `SELECT ${selectFields} FROM Inventory i JOIN Products p ON i.ProductID = p.ProductID WHERE i.UserID = @UserID`;
-        }
-        
-        const request = pool.request();
-        if (userRole !== 'Administrator') {
-            request.input('UserID', sql.Int, userId);
+            queryText = `
+                SELECT ${selectFields} 
+                FROM inventory i 
+                JOIN products p ON i.productid = p.productid 
+                WHERE i.userid = $1
+            `;
+            queryParams.push(userId);
         }
 
-        const result = await request.query(query);
-        res.json(result.recordset);
+        const result = await db.query(queryText, queryParams);
+        // The aliases in the query ensure the keys are Uppercase for the frontend
+        res.json(result.rows);
 
     } catch (error) {
         console.error('[ERROR] An error occurred in /user-inventory route:', error);
@@ -33,72 +50,80 @@ router.post('/user-inventory', async (req, res) => {
     }
 });
 
+// PUT /api/inventory/:id - Update inventory configuration (threshold, auto-reorder)
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { ReorderThreshold, AutoReorder, UserID } = req.body;
+    // Frontend sends Uppercase keys
+    const { ReorderThreshold, AutoReorder, UserID } = req.body; 
+
+    // Convert AutoReorder (bit in SQL Server) to boolean for PostgreSQL
+    const autoReorderBool = Boolean(AutoReorder);
+
     try {
-        const pool = await poolPromise;
-        await pool.request()
-            .input('InventoryID', sql.Int, id)
-            .input('UserID', sql.Int, UserID)
-            .input('ReorderThreshold', sql.Int, ReorderThreshold)
-            .input('AutoReorder', sql.Bit, AutoReorder)
-            .query('UPDATE Inventory SET ReorderThreshold = @ReorderThreshold, AutoReorder = @AutoReorder WHERE InventoryID = @InventoryID AND UserID = @UserID');
+        const queryText = `
+            UPDATE inventory 
+            SET reorderthreshold = $1, autoreorder = $2 
+            WHERE inventoryid = $3 AND userid = $4
+        `;
+        const values = [ReorderThreshold, autoReorderBool, id, UserID];
+        await db.query(queryText, values);
+        
         res.status(200).send('Configuration updated successfully');
     } catch (error) {
         console.error('Error updating inventory config:', error);
-        res.status(500).send('Server error');
+        res.status(500).send({ message: 'Server error updating configuration.'});
     }
 });
 
 // POST /api/inventory/use - Reduce stock for a specific inventory item
 router.post('/use', async (req, res) => {
+    // Frontend sends camelCase/lowercase keys
     const { inventoryId, quantityUsed, userId } = req.body;
 
     if (!inventoryId || !quantityUsed || !userId || quantityUsed <= 0) {
         return res.status(400).json({ message: 'Valid Inventory ID, User ID, and a positive quantity are required.' });
     }
 
+    // Use a client for transaction
+    const client = await db.pool.connect();
+
     try {
-        const pool = await poolPromise;
-        const transaction = pool.transaction();
-        await transaction.begin();
+        await client.query('BEGIN');
 
-        try {
-            // First, get the current stock to ensure we don't go below zero
-            const inventoryResult = await new sql.Request(transaction)
-                .input('InventoryID', sql.Int, inventoryId)
-                .input('UserID', sql.Int, userId)
-                .query('SELECT StockQuantity FROM Inventory WHERE InventoryID = @InventoryID AND UserID = @UserID');
+        // 1. Get current stock and lock the row to prevent race conditions
+        const selectQuery = 'SELECT stockquantity FROM inventory WHERE inventoryid = $1 AND userid = $2 FOR UPDATE';
+        const inventoryResult = await client.query(selectQuery, [inventoryId, userId]);
 
-            if (inventoryResult.recordset.length === 0) {
-                await transaction.rollback();
-                return res.status(404).json({ message: 'Inventory item not found for this user.' });
-            }
-
-            const currentStock = inventoryResult.recordset[0].StockQuantity;
-
-            if (currentStock < quantityUsed) {
-                await transaction.rollback();
-                return res.status(400).json({ message: `Cannot use ${quantityUsed} items. Only ${currentStock} available.` });
-            }
-
-            // If stock is sufficient, update the quantity
-            await new sql.Request(transaction)
-                .input('InventoryID', sql.Int, inventoryId)
-                .input('QuantityUsed', sql.Int, quantityUsed)
-                .query('UPDATE Inventory SET StockQuantity = StockQuantity - @QuantityUsed WHERE InventoryID = @InventoryID');
-
-            await transaction.commit();
-            res.status(200).json({ message: 'Inventory updated successfully.' });
-
-        } catch (err) {
-            await transaction.rollback();
-            throw err;
+        if (inventoryResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Inventory item not found for this user.' });
         }
+
+        const currentStock = inventoryResult.rows[0].stockquantity;
+
+        if (currentStock < quantityUsed) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: `Cannot use ${quantityUsed} items. Only ${currentStock} available.` });
+        }
+
+        // 2. Update the quantity
+        const updateQuery = 'UPDATE inventory SET stockquantity = stockquantity - $1 WHERE inventoryid = $2';
+        await client.query(updateQuery, [quantityUsed, inventoryId]);
+        
+        // --- ADDED: Log the usage ---
+        const logQuery = 'INSERT INTO usagelog (inventoryid, userid, quantityused) VALUES ($1, $2, $3)';
+        await client.query(logQuery, [inventoryId, userId, quantityUsed]);
+        // --- End of addition ---
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: 'Inventory updated successfully.' });
+
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error using inventory item:', err);
         res.status(500).send({ message: 'Server error while updating inventory.' });
+    } finally {
+        client.release(); // Release client back to the pool
     }
 });
 

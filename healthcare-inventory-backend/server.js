@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const sql = require('mssql');
 
-// Import all application routes
+
+// Import the new 'db' object which contains the PostgreSQL pool and query method
+const db = require('./db'); 
+
+// Import all application routes (these remain the same)
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
@@ -16,30 +19,17 @@ const reportsRoutes = require('./routes/reports');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Middleware (remains the same)
 app.use(cors());
 app.use(express.json());
 
-// Database Configuration
-const dbConfig = {
-    user: 'healthcare_app_user',
-    password: 'Pass123!',
-    server: 'ASUS-TUF-GAMING\\SQLEXPRESS',
-    database: 'HealthCareDB',
-    options: {
-        encrypt: false,
-        trustServerCertificate: true
-    }
-};
+// Database Configuration - Removed the old SQL Server config
+// The connection is now handled entirely within db.js
 
-// Test DB Connection on startup
-sql.connect(dbConfig).then(pool => {
-    console.log('✅ [DB] Connected to SQL Server');
-}).catch(err => {
-    console.error('❌ [DB] Database connection failed:', err);
-});
+// Test DB Connection - Removed the old SQL Server test
+// db.js already logs connection status
 
-// Register API routes
+// Register API routes (these remain the same)
 console.log("🔵 [API] Registering routes...");
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -53,7 +43,7 @@ app.use('/api/reports', reportsRoutes);
 
 console.log("✅ [API] All routes registered.");
 
-// Start Server
+// Start Server (remains the same)
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });

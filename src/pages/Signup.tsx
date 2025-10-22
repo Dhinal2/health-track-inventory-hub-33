@@ -45,12 +45,15 @@ const Signup = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        // --- THIS IS THE FIX ---
+        // Changed keys from Uppercase (Name, Email, etc.)
+        // to lowercase (name, email, etc.)
         body: JSON.stringify({
-          Name: formData.name,
-          Email: formData.email,
-          Password: formData.password,
-          Role: 'Healthcare Staff', // Role is now hardcoded
-          ContactNumber: formData.contactNumber,
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: 'Healthcare Staff', // Role is hardcoded
+          contactNumber: formData.contactNumber,
         }),
       });
 
