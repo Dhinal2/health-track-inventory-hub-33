@@ -75,6 +75,12 @@ router.post('/', async (req, res) => {
     // Expect lowercase keys from the frontend (Products.tsx fix)
     const { userId, items, totalAmount } = req.body;
 
+    // --- START OF VALIDATION ---
+    if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).send({ message: 'User ID and a valid list of items are required.' });
+    }
+    // --- END OF VALIDATION ---
+
     // Use a client for transaction
     const client = await db.pool.connect();
 
@@ -88,9 +94,30 @@ router.post('/', async (req, res) => {
 
         // Insert each item into orderitems
         for (const item of items) {
-            // Expecting lowercase keys: productid, quantity, unitprice
+            // --- START OF FIX: More robust validation ---
+            const productid = Number(item.productid);
+            const quantity = Number(item.quantity);
+            const unitPrice = Number(item.unitprice); // This can be 0
+
+            // Check for valid ProductID (must be a number > 0)
+            if (!productid || isNaN(productid) || productid <= 0) {
+                 throw new Error(`Invalid item in order: A product was not selected (ProductID: ${item.productid}).`);
+            }
+
+            // Check for valid Quantity (must be a number > 0)
+            if (item.quantity === null || item.quantity === undefined || isNaN(quantity) || quantity <= 0) {
+                 throw new Error(`Invalid item in order: Product ${productid} has invalid quantity (${item.quantity}).`);
+            }
+            
+            // Check for valid UnitPrice (must be a number >= 0)
+            if (item.unitprice === null || item.unitprice === undefined || isNaN(unitPrice) || unitPrice < 0) {
+                throw new Error(`Invalid item in order: Product ${productid} has invalid unit price (${item.unitprice}).`);
+            }
+            // --- END OF FIX ---
+
             const itemQueryText = 'INSERT INTO orderitems (orderid, productid, quantity, unitprice) VALUES ($1, $2, $3, $4)';
-            await client.query(itemQueryText, [orderId, item.productid, item.quantity, item.unitprice]);
+            // Use the validated/converted number values
+            await client.query(itemQueryText, [orderId, productid, quantity, unitPrice]);
         }
         
         // Insert into invoices
@@ -102,14 +129,22 @@ router.post('/', async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error creating order:', error);
-        res.status(500).send({ message: 'Failed to create order due to a transaction error.' });
+        // Check for our custom error message
+        if (error.message.startsWith('Invalid item in order')) {
+            console.error('Error creating order (validation):', error.message);
+            res.status(400).send({ message: error.message }); // Send 400 for bad data
+        } else {
+            // Handle other errors
+            console.error('Error creating order (database):', error);
+            res.status(500).send({ message: 'Failed to create order due to a transaction error.' });
+        }
     } finally {
         client.release(); // Release the client back to the pool
     }
 });
 
 
+// PUT /api/orders/:id/status - Update order status
 // PUT /api/orders/:id/status - Update order status
 router.put('/:id/status', async (req, res) => {
     const { id } = req.params;
@@ -120,8 +155,7 @@ router.put('/:id/status', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // --- START OF FIX: Get the UserID from the order first ---
-        // We need the UserID to know which inventory to update
+        // --- Get the UserID from the order first ---
         const orderQuery = 'SELECT userid FROM orders WHERE orderid = $1';
         const orderResult = await client.query(orderQuery, [id]);
         
@@ -129,7 +163,7 @@ router.put('/:id/status', async (req, res) => {
             throw new Error('Order not found');
         }
         const userId = orderResult.rows[0].userid;
-        // --- END OF FIX ---
+        // --- End of UserID fetch ---
 
 
         let newStatus = status; // Start with the status sent from frontend
@@ -142,15 +176,21 @@ router.put('/:id/status', async (req, res) => {
             const invoiceResult = await client.query(invoiceQuery, [id]);
             
             if (invoiceResult.rows.length === 0) {
-                 throw new Error('Invoice not found for order'); // Should not happen
+                 throw new Error('Invoice not found for order');
             }
             const invoice = invoiceResult.rows[0];
 
-            if (invoice.paymentstatus === 'Paid') { // Compare with lowercase
+            // --- START OF FINAL FIX: Null-safe, case-insensitive check ---
+            // Use (invoice.paymentstatus || '') to prevent crash if status is null
+            const paymentStatus = (invoice.paymentstatus || '').toLowerCase(); 
+
+            if (paymentStatus === 'paid') {
                 newStatus = 'Completed';
-            } else if (invoice.paymentstatus === 'Partially Paid') { // Compare with lowercase
+            } else if (paymentStatus === 'partially paid') {
                 newStatus = 'Pending Final Payment';
             }
+            // --- END OF FINAL FIX ---
+            
             // If invoice is Unpaid, newStatus remains 'Received' initially
         }
         
@@ -158,26 +198,30 @@ router.put('/:id/status', async (req, res) => {
         const updateQuery = 'UPDATE orders SET status = $1 WHERE orderid = $2';
         await client.query(updateQuery, [newStatus, id]);
 
-        // --- START OF FIX: Update inventory if order is 'Completed' ---
-        // This is the logic that was missing for your "Full Payment" flow
+        // --- START OF UPSERT FIX: Update inventory if order is 'Completed' ---
         if (newStatus === 'Completed') {
             // 1. Get all items from the order
             const itemsQuery = 'SELECT productid, quantity FROM orderitems WHERE orderid = $1';
             const itemsResult = await client.query(itemsQuery, [id]);
             const orderItems = itemsResult.rows;
 
-            // 2. Loop through each item and update inventory stock
+            // 2. Loop through each item and UPSERT inventory stock
             for (const item of orderItems) {
-                const updateInventoryQuery = `
-                    UPDATE inventory 
-                    SET stockquantity = stockquantity + $1 
-                    WHERE productid = $2 AND userid = $3
+                
+                // This "UPSERT" command creates the row if it doesn't exist
+                // or updates the stock if it does.
+                const upsertInventoryQuery = `
+                    INSERT INTO inventory (productid, userid, stockquantity, reorderthreshold, autoreorder)
+                    VALUES ($1, $2, $3, 0, false) -- Use 0 and false as default values
+                    ON CONFLICT (productid, userid) 
+                    DO UPDATE SET stockquantity = inventory.stockquantity + $3;
                 `;
-                // Use Number() to ensure the quantity is treated as a number
-                await client.query(updateInventoryQuery, [Number(item.quantity), item.productid, userId]);
+                
+                // $1 = productid, $2 = userid, $3 = quantity
+                await client.query(upsertInventoryQuery, [item.productid, userId, Number(item.quantity)]);
             }
         }
-        // --- END OF FIX ---
+        // --- END OF UPSERT FIX ---
 
         await client.query('COMMIT');
         res.status(200).send({ message: `Order status updated to ${newStatus}` });

@@ -39,17 +39,7 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({ onFilter }) 
           <span className="text-sm font-medium text-gray-700">Filters:</span>
         </div>
 
-        <select
-          value={filters.category}
-          onChange={(e) => handleFilterChange('category', e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="all">All Categories</option>
-          <option value="PPE">PPE</option>
-          <option value="Medication">Medication</option>
-          <option value="Supplies">Supplies</option>
-          <option value="Medical Device">Medical Device</option>
-        </select>
+
 
         <select
           value={filters.stockLevel}
@@ -61,16 +51,7 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({ onFilter }) 
           <option value="normal">Normal Stock</option>
         </select>
 
-        <select
-          value={filters.expiry}
-          onChange={(e) => handleFilterChange('expiry', e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="all">All Expiry Status</option>
-          <option value="expired">Expired</option>
-          <option value="expiring-soon">Expiring Soon (30 days)</option>
-          <option value="expiring-3months">Expiring in 3 months</option>
-        </select>
+
       </div>
     </div>
   );

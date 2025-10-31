@@ -140,12 +140,21 @@ const Inventory = () => {
   
   const handleReorderSubmit = async (item: InventoryItem, quantity: number) => {
     if (!user) return;
+
+    // --- START OF FIX: Send lowercase keys to the backend ---
     const orderData = {
       userId: user.id,
-      items: [{ ProductID: item.ProductID, Quantity: quantity, UnitPrice: item.Price || 0 }],
+      items: [{
+        productid: item.ProductID, // Changed from ProductID
+        quantity: quantity,          // Changed from Quantity
+        unitprice: item.Price || 0   // Changed from UnitPrice
+      }],
       totalAmount: quantity * (item.Price || 0)
     };
+    // --- END OF FIX ---
+
     try {
+      // This fetch call is now correct
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,9 +162,12 @@ const Inventory = () => {
       });
       if (response.ok) {
         toast({ title: "Reorder Request Submitted" });
-      } else { throw new Error('Failed to create reorder request'); }
-    } catch (error) {
-      toast({ title: "Error", description: "Could not submit reorder request.", variant: "destructive" });
+      } else { 
+        const errorData = await response.json(); // Get error from backend
+        throw new Error(errorData.message || 'Failed to create reorder request'); 
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setIsReorderModalOpen(false);
     }
