@@ -20,6 +20,9 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     // Use lowercase keys
     const { name, description, price, stockquantity } = req.body;
+    if (price <0 || stockquantity <0){
+        return res.status(400).send({message: 'Price and Stock Quantity cannot be negative.'});
+    }
     try {
         // Use PostgreSQL INSERT with $1 placeholders and RETURNING *
         const queryText = `

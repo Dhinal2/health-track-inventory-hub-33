@@ -357,6 +357,7 @@ const Products = () => {
                   <Label>Price *</Label>
                   <Input
                     type="number"
+                    min="0"
                     value={productFormData.price}
                     onChange={(e) =>
                       handleProductFormChange('price', parseFloat(e.target.value) || 0)
@@ -367,9 +368,10 @@ const Products = () => {
                   <Label>Stock Quantity *</Label>
                   <Input
                     type="number"
+                    min="0"
                     value={productFormData.stockquantity}
                     onChange={(e) =>
-                      handleProductFormChange('stockquantity', parseInt(e.target.value) || 0)
+                      handleProductFormChange('stockquantity', Math.max(0, parseInt(e.target.value) || 0))
                     }
                   />
                 </div>

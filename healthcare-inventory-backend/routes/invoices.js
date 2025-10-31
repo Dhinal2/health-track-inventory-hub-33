@@ -136,6 +136,36 @@ router.post('/:id/pay', async (req, res) => {
             await client.query("INSERT INTO shipments (orderid, status, destination, userid) VALUES ($1, 'Pending', 'User Department', $2)", [orderid, userid]);
             finalOrderStatus = 'Dispatched';
         
+        // --- START OF FIX ---
+        // Added this new block to catch the "Full Payment" scenario
+        } else if (currentOrderStatus === 'Received' && newPaymentStatus === 'Paid') {
+            // This path runs when:
+            // 1. Order was 'Awaiting Payment'
+            // 2. Order was 'Delivered'
+            // 3. User clicked 'Mark as Received' (Status -> 'Received')
+            // 4. User makes the full payment (newPaymentStatus -> 'Paid')
+            
+            const orderItemsResult = await client.query('SELECT productid, quantity FROM orderitems WHERE orderid = $1', [orderid]);
+            
+            // Add items to user's personal Inventory
+            for (const item of orderItemsResult.rows) {
+                // Check if user already has this item in their inventory
+                 const inventoryCheckQuery = 'SELECT inventoryid FROM inventory WHERE userid = $1 AND productid = $2';
+                 const inventoryCheck = await client.query(inventoryCheckQuery, [userid, item.productid]);
+
+                 if (inventoryCheck.rows.length > 0) {
+                     // Update existing inventory entry
+                     const updateInventoryQuery = 'UPDATE inventory SET stockquantity = stockquantity + $1 WHERE userid = $2 AND productid = $3';
+                     await client.query(updateInventoryQuery, [item.quantity, userid, item.productid]);
+                 } else {
+                     // Insert new inventory entry (assuming default threshold/autoreorder)
+                     const insertInventoryQuery = 'INSERT INTO inventory (userid, productid, stockquantity, reorderthreshold, autoreorder) VALUES ($1, $2, $3, 50, false)';
+                     await client.query(insertInventoryQuery, [userid, item.productid, item.quantity]);
+                 }
+            }
+             finalOrderStatus = 'Completed';
+        // --- END OF FIX ---
+        
         } else if (currentOrderStatus === 'Pending Final Payment' && newPaymentStatus === 'Paid') {
             const orderItemsResult = await client.query('SELECT productid, quantity FROM orderitems WHERE orderid = $1', [orderid]);
             

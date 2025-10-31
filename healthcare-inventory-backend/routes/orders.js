@@ -120,6 +120,18 @@ router.put('/:id/status', async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // --- START OF FIX: Get the UserID from the order first ---
+        // We need the UserID to know which inventory to update
+        const orderQuery = 'SELECT userid FROM orders WHERE orderid = $1';
+        const orderResult = await client.query(orderQuery, [id]);
+        
+        if (orderResult.rows.length === 0) {
+            throw new Error('Order not found');
+        }
+        const userId = orderResult.rows[0].userid;
+        // --- END OF FIX ---
+
+
         let newStatus = status; // Start with the status sent from frontend
 
         // Determine the actual status to set based on logic
@@ -145,6 +157,27 @@ router.put('/:id/status', async (req, res) => {
         // Update the orders table
         const updateQuery = 'UPDATE orders SET status = $1 WHERE orderid = $2';
         await client.query(updateQuery, [newStatus, id]);
+
+        // --- START OF FIX: Update inventory if order is 'Completed' ---
+        // This is the logic that was missing for your "Full Payment" flow
+        if (newStatus === 'Completed') {
+            // 1. Get all items from the order
+            const itemsQuery = 'SELECT productid, quantity FROM orderitems WHERE orderid = $1';
+            const itemsResult = await client.query(itemsQuery, [id]);
+            const orderItems = itemsResult.rows;
+
+            // 2. Loop through each item and update inventory stock
+            for (const item of orderItems) {
+                const updateInventoryQuery = `
+                    UPDATE inventory 
+                    SET stockquantity = stockquantity + $1 
+                    WHERE productid = $2 AND userid = $3
+                `;
+                // Use Number() to ensure the quantity is treated as a number
+                await client.query(updateInventoryQuery, [Number(item.quantity), item.productid, userId]);
+            }
+        }
+        // --- END OF FIX ---
 
         await client.query('COMMIT');
         res.status(200).send({ message: `Order status updated to ${newStatus}` });
