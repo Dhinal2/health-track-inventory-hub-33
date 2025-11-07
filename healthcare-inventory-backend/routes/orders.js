@@ -1,5 +1,5 @@
 const express = require('express');
-const db = require('../db'); // Import the new 'db' object
+const db = require('../db'); 
 const router = express.Router();
 
 // POST /api/orders/user-orders - Fetch orders for a user or all users
@@ -75,11 +75,11 @@ router.post('/', async (req, res) => {
     // Expect lowercase keys from the frontend (Products.tsx fix)
     const { userId, items, totalAmount } = req.body;
 
-    // --- START OF VALIDATION ---
+
     if (!userId || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).send({ message: 'User ID and a valid list of items are required.' });
     }
-    // --- END OF VALIDATION ---
+
 
     // Use a client for transaction
     const client = await db.pool.connect();
@@ -113,7 +113,7 @@ router.post('/', async (req, res) => {
             if (item.unitprice === null || item.unitprice === undefined || isNaN(unitPrice) || unitPrice < 0) {
                 throw new Error(`Invalid item in order: Product ${productid} has invalid unit price (${item.unitprice}).`);
             }
-            // --- END OF FIX ---
+   
 
             const itemQueryText = 'INSERT INTO orderitems (orderid, productid, quantity, unitprice) VALUES ($1, $2, $3, $4)';
             // Use the validated/converted number values
@@ -144,7 +144,6 @@ router.post('/', async (req, res) => {
 });
 
 
-// PUT /api/orders/:id/status - Update order status
 // PUT /api/orders/:id/status - Update order status
 router.put('/:id/status', async (req, res) => {
     const { id } = req.params;
@@ -180,7 +179,6 @@ router.put('/:id/status', async (req, res) => {
             }
             const invoice = invoiceResult.rows[0];
 
-            // --- START OF FINAL FIX: Null-safe, case-insensitive check ---
             // Use (invoice.paymentstatus || '') to prevent crash if status is null
             const paymentStatus = (invoice.paymentstatus || '').toLowerCase(); 
 
@@ -189,7 +187,6 @@ router.put('/:id/status', async (req, res) => {
             } else if (paymentStatus === 'partially paid') {
                 newStatus = 'Pending Final Payment';
             }
-            // --- END OF FINAL FIX ---
             
             // If invoice is Unpaid, newStatus remains 'Received' initially
         }
@@ -198,7 +195,7 @@ router.put('/:id/status', async (req, res) => {
         const updateQuery = 'UPDATE orders SET status = $1 WHERE orderid = $2';
         await client.query(updateQuery, [newStatus, id]);
 
-        // --- START OF UPSERT FIX: Update inventory if order is 'Completed' ---
+        // --- START OF UPSERT: Update inventory if order is 'Completed' ---
         if (newStatus === 'Completed') {
             // 1. Get all items from the order
             const itemsQuery = 'SELECT productid, quantity FROM orderitems WHERE orderid = $1';
@@ -221,7 +218,7 @@ router.put('/:id/status', async (req, res) => {
                 await client.query(upsertInventoryQuery, [item.productid, userId, Number(item.quantity)]);
             }
         }
-        // --- END OF UPSERT FIX ---
+
 
         await client.query('COMMIT');
         res.status(200).send({ message: `Order status updated to ${newStatus}` });

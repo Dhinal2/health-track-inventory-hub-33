@@ -60,7 +60,6 @@ export const ReportsTable: React.FC<ReportsTableProps> = ({ reportData, isLoadin
   };
 
   const renderCell = (value: any, column: string) => {
-    // ... (This function remains unchanged and correct)
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (column.toLowerCase().includes('date')) return new Date(value).toLocaleDateString();
     const currencyColumns = ['total', 'total revenue', 'average order value'];
@@ -76,7 +75,6 @@ export const ReportsTable: React.FC<ReportsTableProps> = ({ reportData, isLoadin
     return ( <Card> <CardHeader><CardTitle>Report Data</CardTitle></CardHeader> <CardContent><p className="text-muted-foreground">No data available for this report.</p></CardContent> </Card> );
   }
 
-  // --- THIS IS THE FIX ---
   // The getHeaderKey function now correctly converts multi-word headers to camelCase keys.
   const getHeaderKey = (header: string) => {
     const parts = header.split(' ');

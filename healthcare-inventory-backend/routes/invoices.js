@@ -1,5 +1,5 @@
 const express = require('express');
-const db = require('../db'); // Import the new 'db' object
+const db = require('../db'); 
 const router = express.Router();
 
 // POST /api/invoices/user-invoices - Fetch invoices based on user role
@@ -86,13 +86,12 @@ router.post('/:id/pay', async (req, res) => {
         const amountRemaining = parseFloat(totalamount) - parseFloat(totalpaid);
         const paymentAmount = parseFloat(amountPaid);
 
-        // --- START OF FIX 1: Check for overpayment ---
+
         // Use a 1-cent tolerance for potential floating point inaccuracies
         if (paymentAmount > (amountRemaining + 0.01)) {
             await client.query('ROLLBACK');
             return res.status(400).send({ message: `Payment of $${paymentAmount.toFixed(2)} exceeds the remaining amount due of $${amountRemaining.toFixed(2)}.` });
         }
-        // --- END OF FIX 1 ---
 
         // 2. Validate payment amount based on current status
         if (paymentstatus === 'Paid') { // Compare with lowercase
@@ -145,9 +144,8 @@ router.post('/:id/pay', async (req, res) => {
             await client.query("INSERT INTO shipments (orderid, status, destination, userid) VALUES ($1, 'Pending', 'User Department', $2)", [orderid, userid]);
             finalOrderStatus = 'Dispatched';
         
-        // --- START OF FIX 2: Use UPSERT for inventory ---
         } else if (currentOrderStatus === 'Received' && newPaymentStatus === 'Paid') {
-            // This path handles the full-payment-after-receiving scenario
+ 
             
             const orderItemsResult = await client.query('SELECT productid, quantity FROM orderitems WHERE orderid = $1', [orderid]);
             
@@ -180,7 +178,7 @@ router.post('/:id/pay', async (req, res) => {
             }
              finalOrderStatus = 'Completed';
         }
-        // --- END OF FIX 2 ---
+
         
         // Update order status if it changed
         if (finalOrderStatus !== currentOrderStatus) {
@@ -341,9 +339,7 @@ router.get('/:id', async (req, res) => {
 
     } catch (error) {
         console.error(`Error fetching details for invoice #${id}:`, error);
-        // --- THIS IS THE FIX ---
         res.status(500).send({ message: 'Server error while fetching invoice details.' });
-        // --- END OF FIX ---
     }
 });
 

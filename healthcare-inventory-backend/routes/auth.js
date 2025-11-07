@@ -53,14 +53,11 @@ router.post('/login', async (req, res) => {
 
         const user = userResult.rows[0];
         const storedHash = user.password; // lowercase 'password' from schema
-
-        // Now, securely compare the provided password with the stored hash
         const passwordsMatch = await bcrypt.compare(password, storedHash);
 
         if (passwordsMatch) {
             // Send back the user info. 
             // IMPORTANT: The keys (UserID, Name, Role) are case-sensitive 
-            // and must match what the frontend expects in localStorage.
             res.json({
                 UserID: user.userid, // Key: UserID, Value: user.userid
                 Name: user.name,
