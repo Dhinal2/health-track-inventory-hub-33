@@ -1,19 +1,15 @@
 import React from 'react';
-// Removed Card imports as they are not used in the main structure
 import { AlertTriangle, Package, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-// Removed Button import as the button uses standard HTML button styling
-// import { Button } from './ui/button';
 
-// --- FIX: Interface keys changed to lowercase (except UserName alias) ---
+
 interface LowStockItem {
     name: string; // Use lowercase
     stockquantity: number | string | null | undefined; // Use lowercase
     reorderthreshold: number | string | null | undefined; // Use lowercase
     UserName?: string; // Keep Uppercase alias from backend
     // Add productid/inventoryid if backend starts sending them for keys
-    // productid?: number;
-    // inventoryid?: number;
+
 }
 
 interface LowStockAlertsProps {
@@ -68,7 +64,7 @@ export const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ items = [], user
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
                     <AlertTriangle className="w-5 h-5 text-red-500" />
-                    <h3 className="text-lg font-semibold text-gray-900">Low Stock Alerts</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Top 5 Low Stock Items</h3>
                 </div>
                 <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
                     {validItems.length} items
@@ -87,7 +83,7 @@ export const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ items = [], user
                                         <div className="flex items-center space-x-3">
                                             <Package className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                             <div>
-                                                {/* --- FIX: Use lowercase name --- */}
+                                                {/* --- Use lowercase name --- */}
                                                 <p className="font-medium text-gray-900">{item.name || 'N/A'}</p>
                                                 {/* Use Uppercase UserName (alias) */}
                                                 {userRole === 'admin' && item.UserName && (
@@ -97,7 +93,7 @@ export const LowStockAlerts: React.FC<LowStockAlertsProps> = ({ items = [], user
                                         </div>
                                         <div className="text-right flex-shrink-0 ml-2">
                                             <p className="text-sm font-medium text-gray-900">
-                                                {/* --- FIX: Use lowercase keys with displayValue --- */}
+                                                {/* ---  Use lowercase keys with displayValue --- */}
                                                 {displayValue(item.stockquantity)} / {displayValue(item.reorderthreshold)}
                                             </p>
                                             <p className="text-xs text-gray-500">Current / Threshold</p>

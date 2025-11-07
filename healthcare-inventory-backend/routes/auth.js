@@ -5,7 +5,7 @@ const db = require('../db');
 
 // POST /api/auth/signup - Register a new user
 router.post('/signup', async (req, res) => {
-    // We use lowercase to match the new schema
+    // use lowercase to match the new schema
     const { name, email, password, role, contactNumber } = req.body;
 
     try {
@@ -94,7 +94,7 @@ router.post('/verify-password', async (req, res) => {
         }
   
         const user = result.rows[0];
-        // We can await bcrypt.compare
+        // Await bcrypt.compare
         const isMatch = await bcrypt.compare(password, user.password);
   
         if (isMatch) {

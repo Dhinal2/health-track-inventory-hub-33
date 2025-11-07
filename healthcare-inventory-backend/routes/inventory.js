@@ -1,5 +1,5 @@
 const express = require('express');
-const db = require('../db'); // Import the new 'db' object
+const db = require('../db'); 
 const router = express.Router();
 
 // POST /api/inventory/user-inventory - Fetch inventory for a user or all users

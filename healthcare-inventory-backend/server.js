@@ -23,14 +23,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Database Configuration - Removed the old SQL Server config
-// The connection is now handled entirely within db.js
 
-// Test DB Connection - Removed the old SQL Server test
-// db.js already logs connection status
-
-// Register API routes (these remain the same)
-console.log("🔵 [API] Registering routes...");
+// Register API routes
+console.log(" [API] Registering routes...");
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
@@ -41,9 +36,9 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/users', usersRouter); 
 app.use('/api/reports', reportsRoutes);
 
-console.log("✅ [API] All routes registered.");
+console.log("[API] All routes registered.");
 
 // Start Server (remains the same)
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });

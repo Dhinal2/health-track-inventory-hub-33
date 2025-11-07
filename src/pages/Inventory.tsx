@@ -141,17 +141,15 @@ const Inventory = () => {
   const handleReorderSubmit = async (item: InventoryItem, quantity: number) => {
     if (!user) return;
 
-    // --- START OF FIX: Send lowercase keys to the backend ---
     const orderData = {
       userId: user.id,
       items: [{
-        productid: item.ProductID, // Changed from ProductID
-        quantity: quantity,          // Changed from Quantity
-        unitprice: item.Price || 0   // Changed from UnitPrice
+        productid: item.ProductID, 
+        quantity: quantity,          
+        unitprice: item.Price || 0   
       }],
       totalAmount: quantity * (item.Price || 0)
     };
-    // --- END OF FIX ---
 
     try {
       // This fetch call is now correct

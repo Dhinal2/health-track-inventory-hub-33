@@ -151,7 +151,6 @@ router.post('/', async (req, res) => {
         usageChangeType = usageChange.startsWith('+') ? 'positive' : (usageChange === '0.0%' ? 'neutral' : 'negative');
 
         // --- Weekly Usage Data (for Chart) ---
-        // Converted from T-SQL recursive CTE to PostgreSQL recursive CTE
         
         let usageSubQuery = `
             SELECT 
