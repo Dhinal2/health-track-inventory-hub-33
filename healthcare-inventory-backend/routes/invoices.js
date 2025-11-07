@@ -86,22 +86,31 @@ router.post('/:id/pay', async (req, res) => {
         const amountRemaining = parseFloat(totalamount) - parseFloat(totalpaid);
         const paymentAmount = parseFloat(amountPaid);
 
+        // --- START OF FIX 1: Check for overpayment ---
+        // Use a 1-cent tolerance for potential floating point inaccuracies
+        if (paymentAmount > (amountRemaining + 0.01)) {
+            await client.query('ROLLBACK');
+            return res.status(400).send({ message: `Payment of $${paymentAmount.toFixed(2)} exceeds the remaining amount due of $${amountRemaining.toFixed(2)}.` });
+        }
+        // --- END OF FIX 1 ---
+
         // 2. Validate payment amount based on current status
-        if (paymentstatus === 'Unpaid') { // Compare with lowercase
+        if (paymentstatus === 'Paid') { // Compare with lowercase
+             await client.query('ROLLBACK');
+             return res.status(400).send({ message: 'This invoice has already been fully paid.' });
+        } else if (paymentstatus === 'Unpaid') { // Compare with lowercase
             const halfAmount = parseFloat(totalamount) / 2;
-            if (paymentAmount < halfAmount && paymentAmount < parseFloat(totalamount)) {
+            // Check if it's not a full payment and less than half
+            if (paymentAmount < halfAmount && paymentAmount < (parseFloat(totalamount) - 0.01)) {
                 await client.query('ROLLBACK');
                 return res.status(400).send({ message: `The first payment must be at least 50% of the total, or the full amount. Minimum payment: $${halfAmount.toFixed(2)}` });
             }
         } else if (paymentstatus === 'Partially Paid') { // Compare with lowercase
-            // Allow for minor floating point inaccuracies
-            if (paymentAmount < (amountRemaining - 0.001)) { 
+            // Check if the payment is less than the full remaining amount
+            if (paymentAmount < (amountRemaining - 0.01)) { 
                 await client.query('ROLLBACK');
                 return res.status(400).send({ message: `The final payment must cover the full remaining amount of $${amountRemaining.toFixed(2)}.` });
             }
-        } else if (paymentstatus === 'Paid') { // Compare with lowercase
-             await client.query('ROLLBACK');
-             return res.status(400).send({ message: 'This invoice has already been fully paid.' });
         }
         
         // 3. Insert into payments table
@@ -111,7 +120,7 @@ router.post('/:id/pay', async (req, res) => {
         // 4. Determine and update invoice payment status
         const newTotalPaid = parseFloat(totalpaid) + paymentAmount;
         // Check if paid (allowing for floating point inaccuracies)
-        const newPaymentStatus = newTotalPaid >= (parseFloat(totalamount) - 0.001) ? 'Paid' : 'Partially Paid'; 
+        const newPaymentStatus = newTotalPaid >= (parseFloat(totalamount) - 0.01) ? 'Paid' : 'Partially Paid'; 
         
         const updateInvoiceQuery = 'UPDATE invoices SET paymentstatus = $1 WHERE invoiceid = $2';
         await client.query(updateInvoiceQuery, [newPaymentStatus, id]);
@@ -136,57 +145,42 @@ router.post('/:id/pay', async (req, res) => {
             await client.query("INSERT INTO shipments (orderid, status, destination, userid) VALUES ($1, 'Pending', 'User Department', $2)", [orderid, userid]);
             finalOrderStatus = 'Dispatched';
         
-        // --- START OF FIX ---
-        // Added this new block to catch the "Full Payment" scenario
+        // --- START OF FIX 2: Use UPSERT for inventory ---
         } else if (currentOrderStatus === 'Received' && newPaymentStatus === 'Paid') {
-            // This path runs when:
-            // 1. Order was 'Awaiting Payment'
-            // 2. Order was 'Delivered'
-            // 3. User clicked 'Mark as Received' (Status -> 'Received')
-            // 4. User makes the full payment (newPaymentStatus -> 'Paid')
+            // This path handles the full-payment-after-receiving scenario
             
             const orderItemsResult = await client.query('SELECT productid, quantity FROM orderitems WHERE orderid = $1', [orderid]);
             
-            // Add items to user's personal Inventory
+            // Add items to user's personal Inventory using UPSERT
             for (const item of orderItemsResult.rows) {
-                // Check if user already has this item in their inventory
-                 const inventoryCheckQuery = 'SELECT inventoryid FROM inventory WHERE userid = $1 AND productid = $2';
-                 const inventoryCheck = await client.query(inventoryCheckQuery, [userid, item.productid]);
-
-                 if (inventoryCheck.rows.length > 0) {
-                     // Update existing inventory entry
-                     const updateInventoryQuery = 'UPDATE inventory SET stockquantity = stockquantity + $1 WHERE userid = $2 AND productid = $3';
-                     await client.query(updateInventoryQuery, [item.quantity, userid, item.productid]);
-                 } else {
-                     // Insert new inventory entry (assuming default threshold/autoreorder)
-                     const insertInventoryQuery = 'INSERT INTO inventory (userid, productid, stockquantity, reorderthreshold, autoreorder) VALUES ($1, $2, $3, 50, false)';
-                     await client.query(insertInventoryQuery, [userid, item.productid, item.quantity]);
-                 }
+                const upsertInventoryQuery = `
+                    INSERT INTO inventory (productid, userid, stockquantity, reorderthreshold, autoreorder)
+                    VALUES ($1, $2, $3, 0, false) -- Use 0 and false as default values
+                    ON CONFLICT (productid, userid) 
+                    DO UPDATE SET stockquantity = inventory.stockquantity + $3;
+                `;
+                await client.query(upsertInventoryQuery, [item.productid, userid, Number(item.quantity)]);
             }
              finalOrderStatus = 'Completed';
-        // --- END OF FIX ---
         
         } else if (currentOrderStatus === 'Pending Final Payment' && newPaymentStatus === 'Paid') {
+            // This path handles the partial-payment-after-receiving scenario
+            
             const orderItemsResult = await client.query('SELECT productid, quantity FROM orderitems WHERE orderid = $1', [orderid]);
             
-            // Add items to user's personal Inventory
+            // Add items to user's personal Inventory using UPSERT
             for (const item of orderItemsResult.rows) {
-                // Check if user already has this item in their inventory
-                 const inventoryCheckQuery = 'SELECT inventoryid FROM inventory WHERE userid = $1 AND productid = $2';
-                 const inventoryCheck = await client.query(inventoryCheckQuery, [userid, item.productid]);
-
-                 if (inventoryCheck.rows.length > 0) {
-                     // Update existing inventory entry
-                     const updateInventoryQuery = 'UPDATE inventory SET stockquantity = stockquantity + $1 WHERE userid = $2 AND productid = $3';
-                     await client.query(updateInventoryQuery, [item.quantity, userid, item.productid]);
-                 } else {
-                     // Insert new inventory entry (assuming default threshold/autoreorder)
-                     const insertInventoryQuery = 'INSERT INTO inventory (userid, productid, stockquantity, reorderthreshold, autoreorder) VALUES ($1, $2, $3, 50, false)';
-                     await client.query(insertInventoryQuery, [userid, item.productid, item.quantity]);
-                 }
+                const upsertInventoryQuery = `
+                    INSERT INTO inventory (productid, userid, stockquantity, reorderthreshold, autoreorder)
+                    VALUES ($1, $2, $3, 0, false) -- Use 0 and false as default values
+                    ON CONFLICT (productid, userid) 
+                    DO UPDATE SET stockquantity = inventory.stockquantity + $3;
+                `;
+                await client.query(upsertInventoryQuery, [item.productid, userid, Number(item.quantity)]);
             }
              finalOrderStatus = 'Completed';
         }
+        // --- END OF FIX 2 ---
         
         // Update order status if it changed
         if (finalOrderStatus !== currentOrderStatus) {
@@ -266,7 +260,7 @@ router.get('/payment-details/:orderId', async (req, res) => {
         const totalAmount = parseFloat(details.totalamount);
         const amountPaid = parseFloat(details.amountpaid);
         
-        // Send back camelCase keys as expected by frontend? (Assuming yes)
+        // Send back camelCase keys
         res.json({
             totalAmount: totalAmount,
             amountPaid: amountPaid,
@@ -347,7 +341,9 @@ router.get('/:id', async (req, res) => {
 
     } catch (error) {
         console.error(`Error fetching details for invoice #${id}:`, error);
+        // --- THIS IS THE FIX ---
         res.status(500).send({ message: 'Server error while fetching invoice details.' });
+        // --- END OF FIX ---
     }
 });
 
